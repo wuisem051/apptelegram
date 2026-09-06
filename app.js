@@ -14,24 +14,26 @@ let db = null;
 const ADMIN_PASSWORD = "admin";
 
 // ----------------------------------------------------
-// CONFIGURACIÓN DE FIREBASE (Reemplazar con tus credenciales de Firebase Console)
+// CONFIGURACIÓN DE FIREBASE (Proyecto: apptelegram-6aa9a)
 // ----------------------------------------------------
 const firebaseConfig = {
-  apiKey: "TU_API_KEY",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abc123def456"
+  apiKey: "AIzaSyD5I_qLIG_6jg7UiYowdnBgCFo5XhohPfc",
+  authDomain: "apptelegram-6aa9a.firebaseapp.com",
+  projectId: "apptelegram-6aa9a",
+  storageBucket: "apptelegram-6aa9a.firebasestorage.app",
+  messagingSenderId: "985520386327",
+  appId: "1:985520386327:web:48f0e60b66e200b5ed0752",
+  measurementId: "G-ZV41HC84PT"
 };
 
-// Inicializar Firebase Firestore si las credenciales están configuradas
-if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "TU_API_KEY") {
+// Inicializar Firebase Firestore
+if (typeof firebase !== 'undefined') {
   try {
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
+    console.log("🔥 Firebase Firestore conectado exitosamente");
   } catch (e) {
-    console.warn("Firebase no inicializado aún:", e);
+    console.warn("Error al inicializar Firebase:", e);
   }
 }
 
