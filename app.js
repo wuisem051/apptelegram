@@ -195,6 +195,7 @@ function openDownloadModal(gameId) {
 
   currentGameForDownload = game;
 
+  // Llenar datos en el modal
   document.getElementById('modalTitle').textContent = game.title;
   document.getElementById('modalIcon').src = game.icon;
   document.getElementById('modalCategory').textContent = game.category;
@@ -211,6 +212,11 @@ function openDownloadModal(gameId) {
   
   downloadModal.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.remove('translate-y-full');
+
+  // Disparar Rewarded Interstitial mientras el usuario navega / ve el detalle del juego
+  if (typeof show_11738612 === 'function') {
+    show_11738612().catch(e => console.warn('Interstitial Ad error/bypassed:', e));
+  }
 
   startTimer(7);
 }
