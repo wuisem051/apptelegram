@@ -194,6 +194,7 @@ function openDownloadModal(gameId) {
   if (!game) return;
 
   currentGameForDownload = game;
+  adShownForCurrentGame = false; // Resetear estado de anuncio
 
   // Llenar datos en el modal
   document.getElementById('modalTitle').textContent = game.title;
@@ -259,24 +260,33 @@ function startTimer(seconds) {
   }, 1000);
 }
 
+// Bandera global para evitar bucles de anuncios
+let adShownForCurrentGame = false;
+
 /**
  * 7. Monetag & Redirección Final de Descarga
  */
 function executeMonetagAndDownload() {
   if (!currentGameForDownload) return;
 
+  // Si ya se mostró el anuncio en este intento de descarga, abrir el enlace directamente
+  if (adShownForCurrentGame) {
+    openDownloadLink();
+    return;
+  }
+
+  // Marcar como mostrado para que la próxima pulsación libere la descarga
+  adShownForCurrentGame = true;
+
   // Disparar anuncio de Monetag Rewarded Popup (Zona: 11738612)
   if (typeof show_11738612 === 'function') {
     show_11738612('pop').then(() => {
-      // El usuario vio el anuncio correctamente o lo cerró -> liberar descarga
       openDownloadLink();
     }).catch((e) => {
-      console.warn('Error o rechazo en anuncio Monetag:', e);
-      // Abrir descarga incluso si falla el anuncio para no bloquear la experiencia
+      console.warn('Error o cierre en anuncio Monetag:', e);
       openDownloadLink();
     });
   } else {
-    // Fallback en caso de que no haya cargado el SDK
     openDownloadLink();
   }
 }
