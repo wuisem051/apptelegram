@@ -210,14 +210,9 @@ function openDownloadModal(gameId) {
 
   const downloadModal = document.getElementById('downloadModal');
   const modalContainer = document.getElementById('modalContainer');
-  
+  // Abrir modal
   downloadModal.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.remove('translate-y-full');
-
-  // Disparar Rewarded Interstitial mientras el usuario navega / ve el detalle del juego
-  if (typeof show_11738612 === 'function') {
-    show_11738612().catch(e => console.warn('Interstitial Ad error/bypassed:', e));
-  }
 
   startTimer(7);
 }
@@ -260,30 +255,18 @@ function startTimer(seconds) {
   }, 1000);
 }
 
-// Bandera global para evitar bucles de anuncios
-let adShownForCurrentGame = false;
-
 /**
- * 7. Monetag & Redirección Final de Descarga
+ * 7. Monetag Rewarded Interstitial & Descarga Directa
  */
 function executeMonetagAndDownload() {
   if (!currentGameForDownload) return;
 
-  // Si ya se mostró el anuncio en este intento de descarga, abrir el enlace directamente
-  if (adShownForCurrentGame) {
-    openDownloadLink();
-    return;
-  }
-
-  // Marcar como mostrado para que la próxima pulsación libere la descarga
-  adShownForCurrentGame = true;
-
-  // Disparar anuncio de Monetag Rewarded Popup (Zona: 11738612)
+  // Usar ÚNICAMENTE show_11738612() (Rewarded Interstitial)
   if (typeof show_11738612 === 'function') {
-    show_11738612('pop').then(() => {
+    show_11738612().then(() => {
       openDownloadLink();
     }).catch((e) => {
-      console.warn('Error o cierre en anuncio Monetag:', e);
+      console.warn('Interstitial bypass/error:', e);
       openDownloadLink();
     });
   } else {
