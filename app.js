@@ -1,5 +1,5 @@
 /**
- * Telegram Mini App - APK Store & Monetag Integration
+ * Telegram Mini App - APK Store & Monetag Integration + Admin Panel CRUD
  */
 
 // State Application
@@ -9,13 +9,15 @@ let searchQuery = '';
 let currentTimer = null;
 let currentGameForDownload = null;
 
-// Configuración de Monetag Direct / SmartLink (Reemplazar con tu propia URL de Smartlink o Monetag Tag)
+// Configuración de Admin Password & Monetag
+const ADMIN_PASSWORD = "admin"; // Cambiar por tu contraseña preferida
 const MONETAG_SMARTLINK_URL = "https://www.highperformanceformat.com/YOUR_SMARTLINK_ID";
 
 document.addEventListener('DOMContentLoaded', () => {
   initTelegramSDK();
   loadGames();
   setupEventListeners();
+  setupAdminListeners();
 });
 
 /**
@@ -24,17 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
 function initTelegramSDK() {
   if (window.Telegram && window.Telegram.WebApp) {
     const tg = window.Telegram.WebApp;
-    
-    // Expandir a pantalla completa
     tg.expand();
-    
-    // Avisar que la app está lista
     tg.ready();
-
-    // Adaptar colores al tema de Telegram si aplica
-    document.documentElement.classList.add('dark'); // Forzar dark mode por defecto
-    
-    // Configurar color del Header de Telegram
+    document.documentElement.classList.add('dark');
     if (tg.setHeaderColor) {
       tg.setHeaderColor('#0f172a');
     }
@@ -42,13 +36,26 @@ function initTelegramSDK() {
 }
 
 /**
- * 2. Cargar Juegos desde JSON o fallback incorporado
+ * 2. Cargar Juegos (localStorage prioridad + games.json fallback)
  */
 async function loadGames() {
+  const localData = localStorage.getItem('apk_store_games');
+  if (localData) {
+    try {
+      games = JSON.parse(localData);
+      renderCategories();
+      renderGames();
+      return;
+    } catch (e) {
+      console.warn('Error leyendo localStorage:', e);
+    }
+  }
+
   try {
     const response = await fetch('./games.json');
     if (!response.ok) throw new Error('Error al cargar games.json');
     games = await response.json();
+    saveGamesToStorage();
   } catch (error) {
     console.warn('Cargando catálogo local de respaldo:', error);
     games = [
@@ -73,23 +80,17 @@ async function loadGames() {
         icon: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=150&q=80",
         description: "Explora Teyvat en este fascinante juego RPG de mundo abierto. Gráficos de consola optimizados para celulares de gama media y alta.",
         downloadUrl: "https://example.com/download/genshin-impact.apk"
-      },
-      {
-        id: 3,
-        title: "GTA San Andreas (Android)",
-        category: "Acción",
-        size: "2.4 GB",
-        version: "v2.10",
-        androidReq: "Android 7.0+",
-        icon: "https://images.unsplash.com/photo-1612287230202-1ff1d85d1bdf?auto=format&fit=crop&w=150&q=80",
-        description: "El clásico juego de mundo abierto ahora completamente optimizado para Android. Incluye soporte para mandos externos y mejores texturas.",
-        downloadUrl: "https://example.com/download/gta-sa.apk"
       }
     ];
+    saveGamesToStorage();
   }
 
   renderCategories();
   renderGames();
+}
+
+function saveGamesToStorage() {
+  localStorage.setItem('apk_store_games', JSON.stringify(games));
 }
 
 /**
@@ -111,7 +112,6 @@ function renderCategories() {
     </button>
   `).join('');
 
-  // Event Listeners para botones de categoría
   container.querySelectorAll('.category-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
       activeCategory = e.currentTarget.getAttribute('data-category');
@@ -129,7 +129,6 @@ function renderGames() {
   const noResults = document.getElementById('noResults');
   const gameCount = document.getElementById('gameCount');
 
-  // Filtrado por categoría y búsqueda
   const filtered = games.filter(game => {
     const matchesCategory = activeCategory === 'Todos' || game.category === activeCategory;
     const matchesSearch = game.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -168,7 +167,7 @@ function renderGames() {
 }
 
 /**
- * 5. Event Listeners (Buscador, Modales)
+ * 5. Event Listeners Generales
  */
 function setupEventListeners() {
   const searchInput = document.getElementById('searchInput');
@@ -177,18 +176,14 @@ function setupEventListeners() {
     renderGames();
   });
 
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  closeModalBtn.addEventListener('click', closeModal);
+  document.getElementById('closeModalBtn').addEventListener('click', closeModal);
 
-  // Cerrar al dar click fuera del modal
   const downloadModal = document.getElementById('downloadModal');
   downloadModal.addEventListener('click', (e) => {
     if (e.target === downloadModal) closeModal();
   });
 
-  // Botón de Descarga Final con Monetag Trigger
-  const downloadBtn = document.getElementById('downloadBtn');
-  downloadBtn.addEventListener('click', executeMonetagAndDownload);
+  document.getElementById('downloadBtn').addEventListener('click', executeMonetagAndDownload);
 }
 
 /**
@@ -200,7 +195,6 @@ function openDownloadModal(gameId) {
 
   currentGameForDownload = game;
 
-  // Llenar datos en el modal
   document.getElementById('modalTitle').textContent = game.title;
   document.getElementById('modalIcon').src = game.icon;
   document.getElementById('modalCategory').textContent = game.category;
@@ -209,41 +203,31 @@ function openDownloadModal(gameId) {
   document.getElementById('modalReq').textContent = game.androidReq || 'Android 5.0+';
   document.getElementById('modalDesc').textContent = game.description;
 
-  // Reset de la vista de temporizador
-  const timerSection = document.getElementById('timerSection');
-  const actionSection = document.getElementById('downloadActionSection');
-  timerSection.classList.remove('hidden');
-  actionSection.classList.add('hidden');
+  document.getElementById('timerSection').classList.remove('hidden');
+  document.getElementById('downloadActionSection').classList.add('hidden');
 
-  // Abrir modal con animación
   const downloadModal = document.getElementById('downloadModal');
   const modalContainer = document.getElementById('modalContainer');
   
   downloadModal.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.remove('translate-y-full');
 
-  // Iniciar Cuenta Regresiva (7 segundos)
   startTimer(7);
 }
 
 function closeModal() {
   if (currentTimer) clearInterval(currentTimer);
-
   const downloadModal = document.getElementById('downloadModal');
   const modalContainer = document.getElementById('modalContainer');
-
   modalContainer.classList.add('translate-y-full');
   downloadModal.classList.add('opacity-0', 'pointer-events-none');
 }
 
-/**
- * 7. Temporizador Animado
- */
 function startTimer(seconds) {
   let timeLeft = seconds;
   const timerText = document.getElementById('timerText');
   const timerProgress = document.getElementById('timerProgress');
-  const fullDash = 175.9; // Perímetro de r=28 (2 * PI * 28)
+  const fullDash = 175.9;
 
   if (currentTimer) clearInterval(currentTimer);
 
@@ -254,17 +238,14 @@ function startTimer(seconds) {
     timeLeft--;
     timerText.textContent = timeLeft;
     
-    // Actualizar anillo de progreso
     const offset = fullDash - (timeLeft / seconds) * fullDash;
     timerProgress.style.strokeDashoffset = offset;
 
     if (timeLeft <= 0) {
       clearInterval(currentTimer);
-      // Revelar botón de descarga
       document.getElementById('timerSection').classList.add('hidden');
       document.getElementById('downloadActionSection').classList.remove('hidden');
 
-      // Haptic Feedback de Telegram si está disponible
       if (window.Telegram?.WebApp?.HapticFeedback) {
         window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
       }
@@ -273,12 +254,11 @@ function startTimer(seconds) {
 }
 
 /**
- * 8. Integración Monetag + Redirección Final de Descarga
+ * 7. Monetag & Redirección
  */
 function executeMonetagAndDownload() {
   if (!currentGameForDownload) return;
 
-  // Option A: Si usas Rewarded / Interstitial In-Page de Monetag mediante objeto global
   if (typeof show_monetag === 'function') {
     show_monetag().then(() => {
       openDownloadLink();
@@ -286,13 +266,9 @@ function executeMonetagAndDownload() {
       openDownloadLink();
     });
   } else {
-    // Option B: SmartLink u OnClick Ad Direct Trigger (Dispara el anuncio en nueva pestaña y luego abre la descarga)
-    // Disparar anuncio de Monetag vía SmartLink
-    if (MONETAG_SMARTLINK_URL && MONETAG_SMARTLINK_URL !== "https://www.highperformanceformat.com/YOUR_SMARTLINK_ID") {
+    if (MONETAG_SMARTLINK_URL && !MONETAG_SMARTLINK_URL.includes("YOUR_SMARTLINK_ID")) {
       window.open(MONETAG_SMARTLINK_URL, '_blank');
     }
-
-    // Abrir enlace real de APK
     openDownloadLink();
   }
 }
@@ -300,11 +276,163 @@ function executeMonetagAndDownload() {
 function openDownloadLink() {
   if (currentGameForDownload && currentGameForDownload.downloadUrl) {
     if (window.Telegram?.WebApp?.openLink) {
-      // Usar API nativa de Telegram WebApp para abrir enlaces externos
       window.Telegram.WebApp.openLink(currentGameForDownload.downloadUrl);
     } else {
       window.open(currentGameForDownload.downloadUrl, '_blank');
     }
   }
   closeModal();
+}
+
+/**
+ * 8. PANEL DE ADMINISTRACIÓN (CRUD Completo)
+ */
+function setupAdminListeners() {
+  const adminLoginBtn = document.getElementById('adminLoginBtn');
+  const adminAuthModal = document.getElementById('adminAuthModal');
+  const closeAuthModalBtn = document.getElementById('closeAuthModalBtn');
+  const adminAuthForm = document.getElementById('adminAuthForm');
+  const adminPassInput = document.getElementById('adminPassInput');
+  const authErrorMsg = document.getElementById('authErrorMsg');
+
+  const adminPanelModal = document.getElementById('adminPanelModal');
+  const closeAdminPanelBtn = document.getElementById('closeAdminPanelBtn');
+
+  const gameForm = document.getElementById('gameForm');
+  const resetFormBtn = document.getElementById('resetFormBtn');
+
+  // Abrir Modal de Autenticación
+  adminLoginBtn.addEventListener('click', () => {
+    adminPassInput.value = '';
+    authErrorMsg.classList.add('hidden');
+    adminAuthModal.classList.remove('opacity-0', 'pointer-events-none');
+  });
+
+  closeAuthModalBtn.addEventListener('click', () => {
+    adminAuthModal.classList.add('opacity-0', 'pointer-events-none');
+  });
+
+  // Validar Contraseña
+  adminAuthForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (adminPassInput.value === ADMIN_PASSWORD) {
+      adminAuthModal.classList.add('opacity-0', 'pointer-events-none');
+      openAdminPanel();
+    } else {
+      authErrorMsg.classList.remove('hidden');
+    }
+  });
+
+  // Cerrar Panel Admin
+  closeAdminPanelBtn.addEventListener('click', () => {
+    adminPanelModal.classList.add('opacity-0', 'pointer-events-none');
+  });
+
+  // Formulario Crear / Editar Juego
+  gameForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    saveGameFromForm();
+  });
+
+  resetFormBtn.addEventListener('click', resetGameForm);
+}
+
+function openAdminPanel() {
+  const adminPanelModal = document.getElementById('adminPanelModal');
+  resetGameForm();
+  renderAdminGamesList();
+  adminPanelModal.classList.remove('opacity-0', 'pointer-events-none');
+}
+
+function resetGameForm() {
+  document.getElementById('formGameId').value = '';
+  document.getElementById('formTitle').value = '';
+  document.getElementById('formCategory').value = '';
+  document.getElementById('formSize').value = '';
+  document.getElementById('formVersion').value = '';
+  document.getElementById('formReq').value = 'Android 5.0+';
+  document.getElementById('formIcon').value = '';
+  document.getElementById('formDownloadUrl').value = '';
+  document.getElementById('formDesc').value = '';
+  document.getElementById('saveGameBtn').textContent = 'Guardar Juego';
+}
+
+function saveGameFromForm() {
+  const idVal = document.getElementById('formGameId').value;
+  const gameData = {
+    id: idVal ? parseInt(idVal) : Date.now(),
+    title: document.getElementById('formTitle').value.trim(),
+    category: document.getElementById('formCategory').value.trim(),
+    size: document.getElementById('formSize').value.trim(),
+    version: document.getElementById('formVersion').value.trim(),
+    androidReq: document.getElementById('formReq').value.trim() || 'Android 5.0+',
+    icon: document.getElementById('formIcon').value.trim(),
+    downloadUrl: document.getElementById('formDownloadUrl').value.trim(),
+    description: document.getElementById('formDesc').value.trim()
+  };
+
+  if (idVal) {
+    // Editar existente
+    const index = games.findIndex(g => g.id === parseInt(idVal));
+    if (index !== -1) games[index] = gameData;
+  } else {
+    // Agregar nuevo
+    games.unshift(gameData);
+  }
+
+  saveGamesToStorage();
+  renderCategories();
+  renderGames();
+  renderAdminGamesList();
+  resetGameForm();
+
+  alert('¡Juego guardado correctamente!');
+}
+
+function editGame(gameId) {
+  const game = games.find(g => g.id === gameId);
+  if (!game) return;
+
+  document.getElementById('formGameId').value = game.id;
+  document.getElementById('formTitle').value = game.title;
+  document.getElementById('formCategory').value = game.category;
+  document.getElementById('formSize').value = game.size;
+  document.getElementById('formVersion').value = game.version;
+  document.getElementById('formReq').value = game.androidReq || 'Android 5.0+';
+  document.getElementById('formIcon').value = game.icon;
+  document.getElementById('formDownloadUrl').value = game.downloadUrl;
+  document.getElementById('formDesc').value = game.description;
+
+  document.getElementById('saveGameBtn').textContent = 'Actualizar Juego';
+}
+
+function deleteGame(gameId) {
+  if (confirm('¿Estás seguro de que deseas eliminar este juego del catálogo?')) {
+    games = games.filter(g => g.id !== gameId);
+    saveGamesToStorage();
+    renderCategories();
+    renderGames();
+    renderAdminGamesList();
+  }
+}
+
+function renderAdminGamesList() {
+  const container = document.getElementById('adminGamesList');
+  if (games.length === 0) {
+    container.innerHTML = '<p class="text-xs text-slate-500">No hay juegos en la lista.</p>';
+    return;
+  }
+
+  container.innerHTML = games.map(game => `
+    <div class="flex items-center justify-between bg-slate-950 p-2 rounded-xl border border-slate-800 text-xs">
+      <div class="flex items-center gap-2 min-w-0">
+        <img src="${game.icon}" class="w-8 h-8 rounded-lg object-cover">
+        <span class="font-bold text-slate-200 truncate">${game.title}</span>
+      </div>
+      <div class="flex items-center gap-1">
+        <button onclick="editGame(${game.id})" class="px-2 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-lg hover:bg-amber-500/20"><i class="fa-solid fa-pen"></i></button>
+        <button onclick="deleteGame(${game.id})" class="px-2 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/20"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>
+  `).join('');
 }
