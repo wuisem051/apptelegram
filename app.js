@@ -301,6 +301,12 @@ function setupAdminListeners() {
   const gameForm = document.getElementById('gameForm');
   const resetFormBtn = document.getElementById('resetFormBtn');
 
+  // Verificar si la URL contiene ?admin=true para mostrar el botón
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('admin') === 'true') {
+    adminLoginBtn.classList.remove('hidden');
+  }
+
   // Abrir Modal de Autenticación
   adminLoginBtn.addEventListener('click', () => {
     adminPassInput.value = '';
