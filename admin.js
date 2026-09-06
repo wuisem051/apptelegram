@@ -170,7 +170,7 @@ function setupForms() {
 }
 
 /**
- * Función de Autocompletado Play Store (vía iTunes Search API y CORS proxy de Play Store)
+ * Función de Autocompletado Play Store — Multi-estrategia con proxies de respaldo
  */
 async function fetchPlayStoreData(query) {
   const statusEl = document.getElementById('autoFetchStatus');
@@ -182,104 +182,211 @@ async function fetchPlayStoreData(query) {
   }
   if (btn) btn.disabled = true;
 
-  // Extraer ID de la app si es una URL de Play Store (ej: id=com.dts.freefireth)
-  let appId = query;
-  if (query.includes('id=')) {
+  // ── PASO 1: Detectar tipo de entrada ──────────────────────────────────────
+  let appId = null;       // com.package.name
+  let searchTerm = null;  // texto libre para buscar
+
+  const isUrl = query.startsWith('http');
+
+  if (isUrl) {
     try {
       const urlObj = new URL(query);
-      const params = new URLSearchParams(urlObj.search);
-      if (params.has('id')) {
-        appId = params.get('id');
+      // Link directo: play.google.com/store/apps/details?id=com.xxx
+      if (urlObj.searchParams.has('id')) {
+        appId = urlObj.searchParams.get('id');
       }
-    } catch(e) {}
+      // Link de búsqueda: play.google.com/store/search?q=plantas+vs+zombies
+      else if (urlObj.searchParams.has('q')) {
+        searchTerm = urlObj.searchParams.get('q').replace(/\+/g, ' ');
+      }
+    } catch(e) {
+      searchTerm = query;
+    }
+  } else if (query.includes('.') && !query.includes(' ')) {
+    // Parece un package ID escrito directo (ej: com.ea.game.pvzfree_row)
+    appId = query;
+  } else {
+    // Texto libre / nombre de la app
+    searchTerm = query;
   }
 
   try {
-    // 1. Intentar obtener de iTunes/PlayStore proxy directo o API pública de búsqueda de apps (iTunes API como respaldo ultra rápido si coincide nombre)
     let fetchedData = null;
 
-    // Probar a buscar detalles scraped desde corsproxy / allorigins si es URL o ID
-    const targetUrl = `https://play.google.com/store/apps/details?id=${encodeURIComponent(appId)}&hl=es`;
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+    // ── ESTRATEGIA 1: Si tenemos package ID, scraping via múltiples proxies ──
+    if (appId && !fetchedData) {
+      const targetUrl = `https://play.google.com/store/apps/details?id=${encodeURIComponent(appId)}&hl=es`;
+      const proxies = [
+        `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`,
+        `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`,
+        `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`
+      ];
 
-    const res = await fetch(proxyUrl);
-    if (res.ok) {
-      const json = await res.json();
-      if (json.contents) {
-        const html = json.contents;
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
+      for (const proxyUrl of proxies) {
+        try {
+          if (statusEl) statusEl.textContent = `🔍 Intentando proxy ${proxies.indexOf(proxyUrl) + 1}/3...`;
+          const res = await fetch(proxyUrl, { signal: AbortSignal.timeout(7000) });
+          if (!res.ok) continue;
 
-        // Extraer Meta tags de Google Play Store
-        const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
-        const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
-        const ogDesc = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
-                       doc.querySelector('meta[name="description"]')?.getAttribute('content');
-
-        if (ogTitle) {
-          // Limpiar título (generalmente viene como "Nombre de App - Aplicaciones en Google Play")
-          const cleanTitle = ogTitle.replace(/ - Aplicaciones en Google Play.*/i, '').replace(/ - Apps on Google Play.*/i, '').trim();
-
-          // Intentar extraer versión o tamaño del HTML si está en scripts de datos de Google Play
-          let version = 'Varios';
-          let size = 'Varía según dispositivo';
-
-          // Buscar coincidencias de patrón de versión en script o texto
-          const versionMatch = html.match(/\[\[\["([0-9]+\.[0-9]+(?:\.[0-9]+)*)"\]\]/);
-          if (versionMatch && versionMatch[1]) {
-            version = 'v' + versionMatch[1];
+          let html = '';
+          // allorigins devuelve JSON con .contents; los otros devuelven HTML directo
+          if (proxyUrl.includes('allorigins')) {
+            const json = await res.json();
+            html = json.contents || '';
+          } else {
+            html = await res.text();
           }
 
-          fetchedData = {
-            title: cleanTitle,
-            icon: ogImage || '',
-            description: ogDesc || cleanTitle,
-            version: version,
-            size: size
-          };
+          if (!html) continue;
+
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(html, 'text/html');
+
+          const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
+          const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
+          const ogDesc  = doc.querySelector('meta[property="og:description"]')?.getAttribute('content')
+                       || doc.querySelector('meta[name="description"]')?.getAttribute('content');
+
+          if (ogTitle) {
+            const cleanTitle = ogTitle
+              .replace(/ - Aplicaciones en Google Play.*/i, '')
+              .replace(/ - Apps on Google Play.*/i, '')
+              .trim();
+
+            let version = 'Varies';
+            let size    = 'Varía según dispositivo';
+
+            // Intentar extraer versión del HTML
+            const vMatch = html.match(/\[\[\["([0-9]+\.[0-9]+(?:\.[0-9]+)*)"\]\]/);
+            if (vMatch?.[1]) version = 'v' + vMatch[1];
+
+            // Intentar extraer tamaño
+            const sMatch = html.match(/"([0-9]+(?:\.[0-9]+)?\s*(?:MB|GB))"/i);
+            if (sMatch?.[1]) size = sMatch[1];
+
+            fetchedData = { title: cleanTitle, icon: ogImage || '', description: ogDesc || cleanTitle, version, size };
+            break; // Éxito — salir del loop de proxies
+          }
+        } catch(e) {
+          // Proxy falló, probar el siguiente
+          console.warn('Proxy falló:', e.message);
         }
       }
     }
 
-    // 2. Si no obtuvo por Scraping proxy (o falló CORS), consultar iTunes API como fallback rápido de metadatos de apps
+    // ── ESTRATEGIA 2: Si tenemos package ID pero scraping falló → Google Play API no-oficial ──
+    if (appId && !fetchedData) {
+      try {
+        if (statusEl) statusEl.textContent = "🔍 Consultando API de metadatos...";
+        const apiRes = await fetch(`https://play.google.com/store/apps/details?id=${appId}&hl=es`, {
+          headers: { 'User-Agent': 'Mozilla/5.0' },
+          signal: AbortSignal.timeout(6000)
+        });
+        // Normalmente bloqueará CORS, pero a veces funciona en panel web
+        if (apiRes.ok) {
+          const html = await apiRes.text();
+          const titleMatch = html.match(/<title>([^<]+)<\/title>/);
+          if (titleMatch) {
+            fetchedData = {
+              title: titleMatch[1].replace(/ - Aplicaciones en Google Play.*/i,'').trim(),
+              icon: `https://play-lh.googleusercontent.com/a/${appId}`,
+              description: appId,
+              version: 'Varies',
+              size: 'Varía'
+            };
+          }
+        }
+      } catch(e) {}
+    }
+
+    // ── ESTRATEGIA 3: iTunes Search API (funciona para casi cualquier app popular) ──
     if (!fetchedData) {
-      const searchTerms = appId.replace(/com\.|net\.|org\./g, ' ').replace(/\./g, ' ');
-      const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerms)}&entity=software&limit=1`);
-      if (itunesRes.ok) {
-        const itunesJson = await itunesRes.json();
-        if (itunesJson.results && itunesJson.results.length > 0) {
-          const item = itunesJson.results[0];
-          const mbSize = (item.fileSizeBytes / (1024 * 1024)).toFixed(1) + ' MB';
-          fetchedData = {
-            title: item.trackName,
-            icon: item.artworkUrl512 || item.artworkUrl100,
-            description: item.description ? item.description.substring(0, 180) + '...' : item.trackName,
-            version: 'v' + (item.version || '1.0'),
-            size: mbSize
-          };
+      // Si tenemos package ID, extraer términos inteligentes de él
+      const terms = searchTerm
+        || (appId ? appId.replace(/^com\.|^net\.|^org\.|^io\.|^co\./, '').replace(/\./g, ' ') : query);
+
+      if (statusEl) statusEl.textContent = "🔍 Buscando en base de datos de apps...";
+
+      try {
+        const itunesRes = await fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(terms)}&entity=software&limit=5`,
+          { signal: AbortSignal.timeout(8000) }
+        );
+        if (itunesRes.ok) {
+          const itunesJson = await itunesRes.json();
+          if (itunesJson.results?.length > 0) {
+            // Elegir el resultado más relevante
+            let item = itunesJson.results[0];
+            if (itunesJson.results.length > 1 && appId) {
+              // Intentar emparejar por bundle similar
+              const better = itunesJson.results.find(r =>
+                r.bundleId?.toLowerCase().includes(appId.split('.').pop().toLowerCase())
+              );
+              if (better) item = better;
+            }
+            const mbSize = item.fileSizeBytes ? (item.fileSizeBytes / (1024 * 1024)).toFixed(0) + ' MB' : 'Varía';
+            fetchedData = {
+              title: item.trackName,
+              icon: item.artworkUrl512 || item.artworkUrl100,
+              description: item.description
+                ? item.description.substring(0, 200).replace(/\n/g, ' ') + '...'
+                : item.trackName,
+              version: 'v' + (item.version || '1.0'),
+              size: mbSize
+            };
+          }
         }
+      } catch(e) {
+        console.warn('iTunes API error:', e.message);
       }
     }
 
+    // ── ESTRATEGIA 4: Búsqueda web fallback con Open Search / DuckDuckGo API ──
+    if (!fetchedData && searchTerm) {
+      try {
+        if (statusEl) statusEl.textContent = "🔍 Última búsqueda alternativa...";
+        const ddgRes = await fetch(
+          `https://api.duckduckgo.com/?q=${encodeURIComponent(searchTerm + ' android apk')}&format=json&no_redirect=1`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (ddgRes.ok) {
+          const ddgJson = await ddgRes.json();
+          if (ddgJson.AbstractText) {
+            fetchedData = {
+              title: ddgJson.Heading || searchTerm,
+              icon: ddgJson.Image ? 'https://duckduckgo.com' + ddgJson.Image : '',
+              description: ddgJson.AbstractText.substring(0, 200) + '...',
+              version: 'Varies',
+              size: 'Varía'
+            };
+          }
+        }
+      } catch(e) {}
+    }
+
+    // ── RESULTADO ──────────────────────────────────────────────────────────────
     if (fetchedData) {
-      document.getElementById('adminTitle').value = fetchedData.title;
+      document.getElementById('adminTitle').value = fetchedData.title || '';
       if (fetchedData.icon) document.getElementById('adminIcon').value = fetchedData.icon;
       if (fetchedData.description) document.getElementById('adminDesc').value = fetchedData.description;
       if (fetchedData.version) document.getElementById('adminVersion').value = fetchedData.version;
       if (fetchedData.size) document.getElementById('adminSize').value = fetchedData.size;
 
       if (statusEl) {
-        statusEl.textContent = "✅ ¡Campos autocompletados con éxito desde la tienda!";
+        statusEl.textContent = "✅ ¡Campos autocompletados! Revisa y agrega el enlace de descarga.";
         statusEl.className = "text-xs mt-2 text-green-400 font-bold block";
       }
     } else {
-      throw new Error("No se pudieron extraer datos automáticos para esa app.");
+      if (statusEl) {
+        statusEl.textContent = "⚠️ No se encontró info automáticamente. Escribe el nombre exacto de la app tal como aparece en Play Store.";
+        statusEl.className = "text-xs mt-2 text-amber-400 font-medium block";
+      }
     }
   } catch (err) {
     console.warn("AutoFetch Error:", err);
     if (statusEl) {
-      statusEl.textContent = "⚠️ " + (err.message || "No se pudo obtener información automática. Puedes completar manualmente.");
-      statusEl.className = "text-xs mt-2 text-amber-400 font-medium block";
+      statusEl.textContent = "❌ Error de conexión. Intenta con el nombre exacto de la app en lugar del link.";
+      statusEl.className = "text-xs mt-2 text-red-400 font-medium block";
     }
   } finally {
     if (btn) btn.disabled = false;
