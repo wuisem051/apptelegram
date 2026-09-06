@@ -1,5 +1,5 @@
 /**
- * Telegram Mini App - APK Store & Monetag Integration + Admin Panel CRUD
+ * Telegram Mini App - APK Store & Monetag Integration + Admin Panel + Firebase Firestore
  */
 
 // State Application
@@ -8,10 +8,32 @@ let activeCategory = 'Todos';
 let searchQuery = '';
 let currentTimer = null;
 let currentGameForDownload = null;
+let db = null;
 
 // Configuración de Admin Password & Monetag
-const ADMIN_PASSWORD = "admin"; // Cambiar por tu contraseña preferida
-const MONETAG_SMARTLINK_URL = "https://www.highperformanceformat.com/YOUR_SMARTLINK_ID";
+const ADMIN_PASSWORD = "admin";
+
+// ----------------------------------------------------
+// CONFIGURACIÓN DE FIREBASE (Reemplazar con tus credenciales de Firebase Console)
+// ----------------------------------------------------
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "tu-proyecto.firebaseapp.com",
+  projectId: "tu-proyecto",
+  storageBucket: "tu-proyecto.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abc123def456"
+};
+
+// Inicializar Firebase Firestore si las credenciales están configuradas
+if (typeof firebase !== 'undefined' && firebaseConfig.apiKey !== "TU_API_KEY") {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+  } catch (e) {
+    console.warn("Firebase no inicializado aún:", e);
+  }
+}
 
 document.addEventListener('DOMContentLoaded', () => {
   initTelegramSDK();
@@ -36,45 +58,47 @@ function initTelegramSDK() {
 }
 
 /**
- * 2. Cargar Juegos (Fuentes Directas + LocalStorage)
+ * 2. Cargar Juegos (Sincronización en tiempo real con Firebase Firestore o games.json)
  */
 async function loadGames() {
-  let fetchedGames = [];
-  try {
-    const response = await fetch('./games.json?t=' + new Date().getTime(), { cache: 'no-store' });
-    if (response.ok) {
-      fetchedGames = await response.json();
-    }
-  } catch (error) {
-    console.warn('Error fetching games.json:', error);
+  // Si Firebase Firestore está conectado
+  if (db) {
+    db.collection("games").onSnapshot((snapshot) => {
+      const fbGames = [];
+      snapshot.forEach((doc) => {
+        fbGames.push({ docId: doc.id, ...doc.data() });
+      });
+
+      if (fbGames.length > 0) {
+        games = fbGames;
+        renderCategories();
+        renderGames();
+        if (document.getElementById('adminPanelModal')?.classList.contains('opacity-0') === false) {
+          renderAdminGamesList();
+        }
+        return;
+      }
+    }, (error) => {
+      console.warn("Error en la escucha de Firestore:", error);
+      fetchLocalJsonGames();
+    });
+  } else {
+    fetchLocalJsonGames();
   }
-
-  const localData = localStorage.getItem('apk_store_games');
-  let localGames = [];
-  if (localData) {
-    try {
-      localGames = JSON.parse(localData);
-    } catch(e) {}
-  }
-
-  // Unificar manteniendo los juegos de games.json y agregando nuevos de localStorage
-  const map = new Map();
-  fetchedGames.forEach(g => map.set(g.id, g));
-  localGames.forEach(g => {
-    // Si no existía o fue editado localmente
-    map.set(g.id, g);
-  });
-
-  games = Array.from(map.values());
-  saveGamesToStorage();
-
-  activeCategory = 'Todos';
-  renderCategories();
-  renderGames();
 }
 
-function saveGamesToStorage() {
-  localStorage.setItem('apk_store_games', JSON.stringify(games));
+async function fetchLocalJsonGames() {
+  try {
+    const response = await fetch('./games.json?t=' + Date.now());
+    if (response.ok) {
+      games = await response.json();
+    }
+  } catch (error) {
+    console.warn('Error al cargar games.json:', error);
+  }
+
+  renderCategories();
+  renderGames();
 }
 
 /**
@@ -356,10 +380,10 @@ function resetGameForm() {
   document.getElementById('saveGameBtn').textContent = 'Guardar Juego';
 }
 
-function saveGameFromForm() {
-  const idVal = document.getElementById('formGameId').value;
+async function saveGameFromForm() {
+  const docIdVal = document.getElementById('formGameId').value;
   const gameData = {
-    id: idVal ? parseInt(idVal) : Date.now(),
+    id: docIdVal ? parseInt(docIdVal) : Date.now(),
     title: document.getElementById('formTitle').value.trim(),
     category: document.getElementById('formCategory').value.trim(),
     size: document.getElementById('formSize').value.trim(),
@@ -367,51 +391,64 @@ function saveGameFromForm() {
     androidReq: document.getElementById('formReq').value.trim() || 'Android 5.0+',
     icon: document.getElementById('formIcon').value.trim(),
     downloadUrl: document.getElementById('formDownloadUrl').value.trim(),
-    description: document.getElementById('formDesc').value.trim()
+    description: document.getElementById('formDesc').value.trim(),
+    createdAt: new Date().toISOString()
   };
 
-  if (idVal) {
-    // Editar existente
-    const index = games.findIndex(g => g.id === parseInt(idVal));
-    if (index !== -1) games[index] = gameData;
+  if (db) {
+    try {
+      if (docIdVal) {
+        // Actualizar en Firestore
+        const existingGame = games.find(g => g.id === parseInt(docIdVal) || g.docId === docIdVal);
+        if (existingGame && existingGame.docId) {
+          await db.collection("games").doc(existingGame.docId).update(gameData);
+        } else {
+          await db.collection("games").add(gameData);
+        }
+      } else {
+        // Crear nuevo documento en Firestore
+        await db.collection("games").add(gameData);
+      }
+      alert('¡Juego guardado en Firebase exitosamente!');
+    } catch (err) {
+      console.error("Error al guardar en Firebase:", err);
+      alert("Error al guardar en Firebase: " + err.message);
+    }
   } else {
-    // Agregar nuevo
-    games.unshift(gameData);
-  }
-
-  saveGamesToStorage();
-  renderCategories();
-  renderGames();
-  renderAdminGamesList();
-  resetGameForm();
-
-  alert('¡Juego guardado correctamente!');
-}
-
-function editGame(gameId) {
-  const game = games.find(g => g.id === gameId);
-  if (!game) return;
-
-  document.getElementById('formGameId').value = game.id;
-  document.getElementById('formTitle').value = game.title;
-  document.getElementById('formCategory').value = game.category;
-  document.getElementById('formSize').value = game.size;
-  document.getElementById('formVersion').value = game.version;
-  document.getElementById('formReq').value = game.androidReq || 'Android 5.0+';
-  document.getElementById('formIcon').value = game.icon;
-  document.getElementById('formDownloadUrl').value = game.downloadUrl;
-  document.getElementById('formDesc').value = game.description;
-
-  document.getElementById('saveGameBtn').textContent = 'Actualizar Juego';
-}
-
-function deleteGame(gameId) {
-  if (confirm('¿Estás seguro de que deseas eliminar este juego del catálogo?')) {
-    games = games.filter(g => g.id !== gameId);
-    saveGamesToStorage();
+    // Fallback local
+    if (docIdVal) {
+      const index = games.findIndex(g => g.id === parseInt(docIdVal));
+      if (index !== -1) games[index] = gameData;
+    } else {
+      games.unshift(gameData);
+    }
     renderCategories();
     renderGames();
     renderAdminGamesList();
+    alert('¡Juego guardado localmente!');
+  }
+
+  resetGameForm();
+}
+
+async function deleteGame(gameId) {
+  if (confirm('¿Estás seguro de que deseas eliminar este juego del catálogo?')) {
+    if (db) {
+      const targetGame = games.find(g => g.id === gameId || g.docId === gameId);
+      if (targetGame && targetGame.docId) {
+        try {
+          await db.collection("games").doc(targetGame.docId).delete();
+          alert('Juego eliminado de Firebase');
+        } catch (e) {
+          console.error("Error al eliminar de Firebase:", e);
+        }
+      }
+    } else {
+      games = games.filter(g => g.id !== gameId);
+      renderCategories();
+      renderGames();
+      renderAdminGamesList();
+    }
   }
 }
 
