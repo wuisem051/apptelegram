@@ -82,8 +82,12 @@ async function loadGames() {
       } catch(e) {}
 
       const map = new Map();
-      baseJsonGames.forEach(g => map.set(g.id, g));
-      fbGames.forEach(g => map.set(g.id || g.docId, g));
+      if (Array.isArray(baseJsonGames)) {
+        baseJsonGames.forEach(g => { if (g && (g.id || g.docId)) map.set(g.id || g.docId, g); });
+      }
+      if (Array.isArray(fbGames)) {
+        fbGames.forEach(g => { if (g && (g.id || g.docId)) map.set(g.id || g.docId, g); });
+      }
 
       games = Array.from(map.values());
       renderCategories();
