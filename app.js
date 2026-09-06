@@ -256,30 +256,32 @@ function startTimer(seconds) {
 }
 
 /**
- * 7. Monetag Rewarded Interstitial & Descarga Directa
+ * 7. Monetag Rewarded Interstitial & Descarga Directa Garantizada
  */
 function executeMonetagAndDownload() {
   if (!currentGameForDownload) return;
 
-  // Usar ÚNICAMENTE show_11738612() (Rewarded Interstitial)
+  // 1. Abrir la descarga de inmediato para asegurar que el enlace (Mediafire, Mega, Drive, etc.) nunca falle
+  openDownloadLink();
+
+  // 2. Disparar el anuncio de Monetag en segundo plano
   if (typeof show_11738612 === 'function') {
-    show_11738612().then(() => {
-      openDownloadLink();
-    }).catch((e) => {
-      console.warn('Interstitial bypass/error:', e);
-      openDownloadLink();
+    show_11738612().catch((e) => {
+      console.warn('Monetag interstitial bypassed:', e);
     });
-  } else {
-    openDownloadLink();
   }
 }
 
 function openDownloadLink() {
   if (currentGameForDownload && currentGameForDownload.downloadUrl) {
+    const url = currentGameForDownload.downloadUrl;
+    
+    // Si estamos dentro del entorno de Telegram WebApp
     if (window.Telegram?.WebApp?.openLink) {
-      window.Telegram.WebApp.openLink(currentGameForDownload.downloadUrl);
+      window.Telegram.WebApp.openLink(url);
     } else {
-      window.open(currentGameForDownload.downloadUrl, '_blank');
+      // Si estamos en navegador convencional, abrir en nueva pestaña
+      window.open(url, '_blank');
     }
   }
   closeModal();
