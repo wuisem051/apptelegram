@@ -194,7 +194,6 @@ function openDownloadModal(gameId) {
   if (!game) return;
 
   currentGameForDownload = game;
-  adShownForCurrentGame = false; // Resetear estado de anuncio
 
   // Llenar datos en el modal
   document.getElementById('modalTitle').textContent = game.title;
@@ -210,9 +209,15 @@ function openDownloadModal(gameId) {
 
   const downloadModal = document.getElementById('downloadModal');
   const modalContainer = document.getElementById('modalContainer');
+  
   // Abrir modal
   downloadModal.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.remove('translate-y-full');
+
+  // Disparar anuncio de Monetag ÚNICAMENTE durante la navegación (al hacer clic en un juego)
+  if (typeof show_11738612 === 'function') {
+    show_11738612().catch((e) => console.warn('Monetag navigation ad bypassed:', e));
+  }
 
   startTimer(7);
 }
@@ -256,20 +261,10 @@ function startTimer(seconds) {
 }
 
 /**
- * 7. Monetag Rewarded Interstitial & Descarga Directa Garantizada
+ * 7. Descarga Directa Limpia (Sin Anuncios)
  */
 function executeMonetagAndDownload() {
-  if (!currentGameForDownload) return;
-
-  // 1. Abrir la descarga de inmediato para asegurar que el enlace (Mediafire, Mega, Drive, etc.) nunca falle
   openDownloadLink();
-
-  // 2. Disparar el anuncio de Monetag en segundo plano
-  if (typeof show_11738612 === 'function') {
-    show_11738612().catch((e) => {
-      console.warn('Monetag interstitial bypassed:', e);
-    });
-  }
 }
 
 function openDownloadLink() {
