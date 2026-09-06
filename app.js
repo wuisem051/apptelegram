@@ -140,7 +140,7 @@ function renderCategories() {
 }
 
 /**
- * 4. Renderizado Dinámico del Grid de Juegos
+ * 4. Renderizado Dinámico del Grid de Juegos (Con Sistema de Estrellas)
  */
 function renderGames() {
   const grid = document.getElementById('gamesGrid');
@@ -189,6 +189,9 @@ function renderGames() {
           <h4 class="font-bold text-sm text-slate-100 truncate">${game.title}</h4>
           <div class="flex items-center gap-2 mt-1">
             <span class="text-[10px] font-semibold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-md">${game.category}</span>
+            <span class="text-xs text-amber-400 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-star text-[10px]"></i> ${game.rating || '5.0'}
+            </span>
             <span class="text-xs text-slate-400 font-medium">${game.size}</span>
           </div>
         </div>
@@ -303,15 +306,55 @@ function executeMonetagAndDownload() {
   openDownloadLink();
 }
 
+/**
+ * 8. Registrar Descarga en Analíticas de Firebase
+ */
+async function trackDownload(game) {
+  if (!game) return;
+
+  try {
+    // Obtener País e IP del usuario mediante API gratuita ipapi.co
+    let country = "Desconocido";
+    let countryCode = "🌐";
+    try {
+      const geoRes = await fetch('https://ipapi.co/json/');
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        country = geoData.country_name || "Desconocido";
+        countryCode = geoData.country_code ? `https://flagcdn.com/24x18/${geoData.country_code.toLowerCase()}.png` : "🌐";
+      }
+    } catch (e) {
+      console.warn("Geo IP fetch error:", e);
+    }
+
+    const downloadLog = {
+      gameId: game.id || 0,
+      gameTitle: game.title,
+      country: country,
+      countryFlag: countryCode,
+      timestamp: new Date().toISOString(),
+      timeFormatted: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      dateFormatted: new Date().toLocaleDateString()
+    };
+
+    if (db) {
+      await db.collection("downloads").add(downloadLog);
+    }
+  } catch (err) {
+    console.warn("Error tracking download:", err);
+  }
+}
+
 function openDownloadLink() {
   if (currentGameForDownload && currentGameForDownload.downloadUrl) {
     const url = currentGameForDownload.downloadUrl;
     
-    // Si estamos dentro del entorno de Telegram WebApp
+    // Registrar analítica en segundo plano
+    trackDownload(currentGameForDownload);
+
     if (window.Telegram?.WebApp?.openLink) {
       window.Telegram.WebApp.openLink(url);
     } else {
-      // Si estamos en navegador convencional, abrir en nueva pestaña
       window.open(url, '_blank');
     }
   }
@@ -319,7 +362,7 @@ function openDownloadLink() {
 }
 
 /**
- * 8. PANEL DE ADMINISTRACIÓN (CRUD Completo)
+ * 9. PANEL DE ADMINISTRACIÓN (Tabs, Ajustes, Analytics y CRUD)
  */
 function setupAdminListeners() {
   const adminLoginBtn = document.getElementById('adminLoginBtn');
@@ -332,28 +375,74 @@ function setupAdminListeners() {
   const adminPanelModal = document.getElementById('adminPanelModal');
   const closeAdminPanelBtn = document.getElementById('closeAdminPanelBtn');
 
-  const gameForm = document.getElementById('gameForm');
-  const resetFormBtn = document.getElementById('resetFormBtn');
-
-  // Verificar si la URL contiene ?admin=true para mostrar el botón
+  // URL Query Param Admin Check
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('admin') === 'true') {
-    adminLoginBtn.classList.remove('hidden');
+    adminLoginBtn?.classList.remove('hidden');
   }
 
-  // Abrir Modal de Autenticación
-  adminLoginBtn.addEventListener('click', () => {
+  // Cargar Ajustes de Header Guardados
+  loadAppSettings();
+
+  // Tabs del Admin
+  const tabGamesBtn = document.getElementById('tabGamesBtn');
+  const tabSettingsBtn = document.getElementById('tabSettingsBtn');
+  const tabAnalyticsBtn = document.getElementById('tabAnalyticsBtn');
+
+  const adminSectionGames = document.getElementById('adminSectionGames');
+  const adminSectionSettings = document.getElementById('adminSectionSettings');
+  const adminSectionAnalytics = document.getElementById('adminSectionAnalytics');
+
+  tabGamesBtn?.addEventListener('click', () => {
+    switchTab(tabGamesBtn, adminSectionGames);
+  });
+  tabSettingsBtn?.addEventListener('click', () => {
+    switchTab(tabSettingsBtn, adminSectionSettings);
+  });
+  tabAnalyticsBtn?.addEventListener('click', () => {
+    switchTab(tabAnalyticsBtn, adminSectionAnalytics);
+    loadAnalyticsData();
+  });
+
+  function switchTab(activeBtn, activeSection) {
+    [tabGamesBtn, tabSettingsBtn, tabAnalyticsBtn].forEach(b => {
+      b?.classList.remove('text-green-400', 'border-b-2', 'border-green-500');
+      b?.classList.add('text-slate-400');
+    });
+    [adminSectionGames, adminSectionSettings, adminSectionAnalytics].forEach(s => s?.classList.add('hidden'));
+
+    activeBtn?.classList.add('text-green-400', 'border-b-2', 'border-green-500');
+    activeBtn?.classList.remove('text-slate-400');
+    activeSection?.classList.remove('hidden');
+  }
+
+  // Formulario Ajustes App
+  document.getElementById('appSettingsForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const titleVal = document.getElementById('settingTitle').value.trim();
+    const subVal = document.getElementById('settingSubtitle').value.trim();
+
+    if (titleVal) document.getElementById('appHeaderTitle').textContent = titleVal;
+    if (subVal) document.getElementById('appHeaderSubtitle').textContent = subVal;
+
+    if (db) {
+      await db.collection("settings").doc("header").set({ title: titleVal, subtitle: subVal });
+    }
+    alert("¡Ajustes de encabezado guardados!");
+  });
+
+  // Login
+  adminLoginBtn?.addEventListener('click', () => {
     adminPassInput.value = '';
     authErrorMsg.classList.add('hidden');
     adminAuthModal.classList.remove('opacity-0', 'pointer-events-none');
   });
 
-  closeAuthModalBtn.addEventListener('click', () => {
+  closeAuthModalBtn?.addEventListener('click', () => {
     adminAuthModal.classList.add('opacity-0', 'pointer-events-none');
   });
 
-  // Validar Contraseña
-  adminAuthForm.addEventListener('submit', (e) => {
+  adminAuthForm?.addEventListener('submit', (e) => {
     e.preventDefault();
     if (adminPassInput.value === ADMIN_PASSWORD) {
       adminAuthModal.classList.add('opacity-0', 'pointer-events-none');
@@ -363,29 +452,95 @@ function setupAdminListeners() {
     }
   });
 
-  // Cerrar Panel Admin
-  closeAdminPanelBtn.addEventListener('click', () => {
+  closeAdminPanelBtn?.addEventListener('click', () => {
     adminPanelModal.classList.add('opacity-0', 'pointer-events-none');
   });
 
-  // Formulario Crear / Editar Juego
-  gameForm.addEventListener('submit', (e) => {
+  document.getElementById('gameForm')?.addEventListener('submit', (e) => {
     e.preventDefault();
     saveGameFromForm();
   });
 
-  resetFormBtn.addEventListener('click', resetGameForm);
+  document.getElementById('resetFormBtn')?.addEventListener('click', resetGameForm);
+}
 
-  // Copiar JSON del catálogo
-  document.getElementById('copyJsonBtn')?.addEventListener('click', () => {
-    const jsonStr = JSON.stringify(games, null, 2);
-    navigator.clipboard.writeText(jsonStr).then(() => {
-      alert('¡Catálogo JSON copiado al portapapeles! Puedes pegarlo en tu archivo games.json de GitHub si deseas guardarlo permanentemente.');
-    }).catch(err => {
-      console.warn('Error al copiar:', err);
-      prompt('Copia este código JSON para tu archivo games.json:', jsonStr);
+async function loadAppSettings() {
+  if (db) {
+    try {
+      const doc = await db.collection("settings").doc("header").get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data.title) {
+          document.getElementById('appHeaderTitle').textContent = data.title;
+          document.getElementById('settingTitle').value = data.title;
+        }
+        if (data.subtitle) {
+          document.getElementById('appHeaderSubtitle').textContent = data.subtitle;
+          document.getElementById('settingSubtitle').value = data.subtitle;
+        }
+      }
+    } catch (e) {
+      console.warn("Error cargando ajustes del header:", e);
+    }
+  }
+}
+
+async function loadAnalyticsData() {
+  const logList = document.getElementById('analyticsLogList');
+  const totalCountEl = document.getElementById('totalDownloadsCount');
+  const topCountryEl = document.getElementById('topCountryStat');
+
+  if (!db) {
+    logList.innerHTML = '<p class="text-slate-500">Conecta Firebase para ver analíticas en vivo.</p>';
+    return;
+  }
+
+  try {
+    const snapshot = await db.collection("downloads").orderBy("timestamp", "desc").limit(50).get();
+    const logs = [];
+    const countryCounts = {};
+
+    snapshot.forEach(doc => {
+      const data = doc.data();
+      logs.push(data);
+      countryCounts[data.country] = (countryCounts[data.country] || 0) + 1;
     });
-  });
+
+    totalCountEl.textContent = logs.length;
+
+    // Calcular país top
+    let topCountry = "-";
+    let maxCount = 0;
+    Object.keys(countryCounts).forEach(c => {
+      if (countryCounts[c] > maxCount) {
+        maxCount = countryCounts[c];
+        topCountry = `${c} (${maxCount})`;
+      }
+    });
+    topCountryEl.textContent = topCountry;
+
+    if (logs.length === 0) {
+      logList.innerHTML = '<p class="text-slate-500">Aún no se han registrado descargas.</p>';
+      return;
+    }
+
+    logList.innerHTML = logs.map(l => `
+      <div class="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex items-center justify-between gap-2">
+        <div class="min-w-0">
+          <p class="font-bold text-slate-200 truncate">${l.gameTitle}</p>
+          <p class="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+            ${l.countryFlag && l.countryFlag.startsWith('http') ? `<img src="${l.countryFlag}" class="w-4 h-3 inline">` : '🌐'} ${l.country}
+          </p>
+        </div>
+        <span class="text-[10px] font-semibold text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-md whitespace-nowrap">
+          ${l.timeFormatted} - ${l.dateFormatted}
+        </span>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.warn("Error al cargar analíticas:", e);
+    logList.innerHTML = '<p class="text-red-400">Error al cargar historial de analíticas.</p>';
+  }
 }
 
 function openAdminPanel() {
@@ -416,6 +571,7 @@ async function saveGameFromForm() {
     category: document.getElementById('formCategory').value.trim(),
     size: document.getElementById('formSize').value.trim(),
     version: document.getElementById('formVersion').value.trim(),
+    rating: document.getElementById('formRating').value || '5.0',
     androidReq: document.getElementById('formReq').value.trim() || 'Android 5.0+',
     icon: document.getElementById('formIcon').value.trim(),
     downloadUrl: document.getElementById('formDownloadUrl').value.trim(),
@@ -426,7 +582,6 @@ async function saveGameFromForm() {
   if (db) {
     try {
       if (docIdVal) {
-        // Actualizar en Firestore
         const existingGame = games.find(g => g.id === parseInt(docIdVal) || g.docId === docIdVal);
         if (existingGame && existingGame.docId) {
           await db.collection("games").doc(existingGame.docId).update(gameData);
@@ -434,7 +589,6 @@ async function saveGameFromForm() {
           await db.collection("games").add(gameData);
         }
       } else {
-        // Crear nuevo documento en Firestore
         await db.collection("games").add(gameData);
       }
       alert('¡Juego guardado en Firebase exitosamente!');
@@ -443,7 +597,6 @@ async function saveGameFromForm() {
       alert("Error al guardar en Firebase: " + err.message);
     }
   } else {
-    // Fallback local
     if (docIdVal) {
       const index = games.findIndex(g => g.id === parseInt(docIdVal));
       if (index !== -1) games[index] = gameData;
@@ -457,6 +610,24 @@ async function saveGameFromForm() {
   }
 
   resetGameForm();
+}
+
+function editGame(gameId) {
+  const game = games.find(g => g.id === gameId);
+  if (!game) return;
+
+  document.getElementById('formGameId').value = game.id;
+  document.getElementById('formTitle').value = game.title;
+  document.getElementById('formCategory').value = game.category;
+  document.getElementById('formSize').value = game.size;
+  document.getElementById('formVersion').value = game.version;
+  document.getElementById('formRating').value = game.rating || '5.0';
+  document.getElementById('formReq').value = game.androidReq || 'Android 5.0+';
+  document.getElementById('formIcon').value = game.icon;
+  document.getElementById('formDownloadUrl').value = game.downloadUrl;
+  document.getElementById('formDesc').value = game.description;
+
+  document.getElementById('saveGameBtn').textContent = 'Actualizar Juego';
 }
 
 async function deleteGame(gameId) {
