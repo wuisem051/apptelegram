@@ -63,22 +63,32 @@ function initTelegramSDK() {
  * 2. Cargar Juegos (Sincronización en tiempo real con Firebase Firestore o games.json)
  */
 async function loadGames() {
-  // Si Firebase Firestore está conectado
   if (db) {
-    db.collection("games").onSnapshot((snapshot) => {
+    db.collection("games").onSnapshot(async (snapshot) => {
       const fbGames = [];
       snapshot.forEach((doc) => {
         fbGames.push({ docId: doc.id, ...doc.data() });
       });
 
-      if (fbGames.length > 0) {
-        games = fbGames;
-        renderCategories();
-        renderGames();
-        if (document.getElementById('adminPanelModal')?.classList.contains('opacity-0') === false) {
-          renderAdminGamesList();
-        }
-        return;
+      // Obtener además los juegos de games.json para asegurar catálogo inicial
+      let baseJsonGames = [];
+      try {
+        const res = await fetch('./games.json?v=' + Date.now());
+        if (res.ok) baseJsonGames = await res.json();
+      } catch(e) {}
+
+      // Combinar los de Firebase (tienen prioridad) con los de games.json
+      const map = new Map();
+      baseJsonGames.forEach(g => map.set(g.id, g));
+      fbGames.forEach(g => map.set(g.id || g.docId, g));
+
+      games = Array.from(map.values());
+
+      activeCategory = 'Todos';
+      renderCategories();
+      renderGames();
+      if (document.getElementById('adminPanelModal')?.classList.contains('opacity-0') === false) {
+        renderAdminGamesList();
       }
     }, (error) => {
       console.warn("Error en la escucha de Firestore:", error);
