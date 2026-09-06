@@ -36,47 +36,39 @@ function initTelegramSDK() {
 }
 
 /**
- * 2. Cargar Juegos (Sincronización Inteligente de Cuestiones JSON + localStorage)
+ * 2. Cargar Juegos (Fuentes Directas + LocalStorage)
  */
 async function loadGames() {
-  let jsonGames = [];
+  let fetchedGames = [];
   try {
-    const response = await fetch('./games.json?v=' + Date.now());
+    const response = await fetch('./games.json?t=' + new Date().getTime(), { cache: 'no-store' });
     if (response.ok) {
-      jsonGames = await response.json();
+      fetchedGames = await response.json();
     }
   } catch (error) {
-    console.warn('Error cargando games.json remoto:', error);
+    console.warn('Error fetching games.json:', error);
   }
 
   const localData = localStorage.getItem('apk_store_games');
+  let localGames = [];
   if (localData) {
     try {
-      const localGames = JSON.parse(localData);
-      // Combinar juegos manteniendo cambios locales y agregando los nuevos del JSON si no existen
-      const localIds = new Set(localGames.map(g => g.id));
-      const newFromJSON = jsonGames.filter(g => !localIds.has(g.id));
-      games = [...localGames, ...newFromJSON];
-    } catch (e) {
-      games = jsonGames;
-    }
-  } else {
-    games = jsonGames.length > 0 ? jsonGames : [
-      {
-        id: 1,
-        title: "Subway Surfers (MOD Dinero)",
-        category: "Offline",
-        size: "145 MB",
-        version: "v3.18.0",
-        androidReq: "Android 5.0+",
-        icon: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=150&q=80",
-        description: "Corre a toda velocidad escapando del inspector. Modificación con dinero, monedas e llaves ilimitadas para desbloquear todos los personajes.",
-        downloadUrl: "https://example.com/download/subway-surfers-mod.apk"
-      }
-    ];
+      localGames = JSON.parse(localData);
+    } catch(e) {}
   }
 
+  // Unificar manteniendo los juegos de games.json y agregando nuevos de localStorage
+  const map = new Map();
+  fetchedGames.forEach(g => map.set(g.id, g));
+  localGames.forEach(g => {
+    // Si no existía o fue editado localmente
+    map.set(g.id, g);
+  });
+
+  games = Array.from(map.values());
   saveGamesToStorage();
+
+  activeCategory = 'Todos';
   renderCategories();
   renderGames();
 }
@@ -331,6 +323,17 @@ function setupAdminListeners() {
   });
 
   resetFormBtn.addEventListener('click', resetGameForm);
+
+  // Copiar JSON del catálogo
+  document.getElementById('copyJsonBtn')?.addEventListener('click', () => {
+    const jsonStr = JSON.stringify(games, null, 2);
+    navigator.clipboard.writeText(jsonStr).then(() => {
+      alert('¡Catálogo JSON copiado al portapapeles! Puedes pegarlo en tu archivo games.json de GitHub si deseas guardarlo permanentemente.');
+    }).catch(err => {
+      console.warn('Error al copiar:', err);
+      prompt('Copia este código JSON para tu archivo games.json:', jsonStr);
+    });
+  });
 }
 
 function openAdminPanel() {
