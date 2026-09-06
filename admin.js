@@ -154,6 +154,136 @@ function setupForms() {
       alert("¡JSON de catálogo copiado al portapapeles! Puedes pegarlo en GitHub.");
     }).catch(() => prompt("Copia el JSON:", jsonStr));
   });
+
+  const autoFetchBtn = document.getElementById('autoFetchBtn');
+  const autoFetchQuery = document.getElementById('autoFetchQuery');
+  if (autoFetchBtn && autoFetchQuery) {
+    autoFetchBtn.addEventListener('click', async () => {
+      const query = autoFetchQuery.value.trim();
+      if (!query) {
+        alert("Por favor ingresa el link de la app de Play Store o su paquete/nombre.");
+        return;
+      }
+      await fetchPlayStoreData(query);
+    });
+  }
+}
+
+/**
+ * Función de Autocompletado Play Store (vía iTunes Search API y CORS proxy de Play Store)
+ */
+async function fetchPlayStoreData(query) {
+  const statusEl = document.getElementById('autoFetchStatus');
+  const btn = document.getElementById('autoFetchBtn');
+
+  if (statusEl) {
+    statusEl.textContent = "🔍 Buscando información de la aplicación...";
+    statusEl.className = "text-xs mt-2 text-amber-400 font-medium block";
+  }
+  if (btn) btn.disabled = true;
+
+  // Extraer ID de la app si es una URL de Play Store (ej: id=com.dts.freefireth)
+  let appId = query;
+  if (query.includes('id=')) {
+    try {
+      const urlObj = new URL(query);
+      const params = new URLSearchParams(urlObj.search);
+      if (params.has('id')) {
+        appId = params.get('id');
+      }
+    } catch(e) {}
+  }
+
+  try {
+    // 1. Intentar obtener de iTunes/PlayStore proxy directo o API pública de búsqueda de apps (iTunes API como respaldo ultra rápido si coincide nombre)
+    let fetchedData = null;
+
+    // Probar a buscar detalles scraped desde corsproxy / allorigins si es URL o ID
+    const targetUrl = `https://play.google.com/store/apps/details?id=${encodeURIComponent(appId)}&hl=es`;
+    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
+
+    const res = await fetch(proxyUrl);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.contents) {
+        const html = json.contents;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+
+        // Extraer Meta tags de Google Play Store
+        const ogTitle = doc.querySelector('meta[property="og:title"]')?.getAttribute('content');
+        const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content');
+        const ogDesc = doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || 
+                       doc.querySelector('meta[name="description"]')?.getAttribute('content');
+
+        if (ogTitle) {
+          // Limpiar título (generalmente viene como "Nombre de App - Aplicaciones en Google Play")
+          const cleanTitle = ogTitle.replace(/ - Aplicaciones en Google Play.*/i, '').replace(/ - Apps on Google Play.*/i, '').trim();
+
+          // Intentar extraer versión o tamaño del HTML si está en scripts de datos de Google Play
+          let version = 'Varios';
+          let size = 'Varía según dispositivo';
+
+          // Buscar coincidencias de patrón de versión en script o texto
+          const versionMatch = html.match(/\[\[\["([0-9]+\.[0-9]+(?:\.[0-9]+)*)"\]\]/);
+          if (versionMatch && versionMatch[1]) {
+            version = 'v' + versionMatch[1];
+          }
+
+          fetchedData = {
+            title: cleanTitle,
+            icon: ogImage || '',
+            description: ogDesc || cleanTitle,
+            version: version,
+            size: size
+          };
+        }
+      }
+    }
+
+    // 2. Si no obtuvo por Scraping proxy (o falló CORS), consultar iTunes API como fallback rápido de metadatos de apps
+    if (!fetchedData) {
+      const searchTerms = appId.replace(/com\.|net\.|org\./g, ' ').replace(/\./g, ' ');
+      const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTerms)}&entity=software&limit=1`);
+      if (itunesRes.ok) {
+        const itunesJson = await itunesRes.json();
+        if (itunesJson.results && itunesJson.results.length > 0) {
+          const item = itunesJson.results[0];
+          const mbSize = (item.fileSizeBytes / (1024 * 1024)).toFixed(1) + ' MB';
+          fetchedData = {
+            title: item.trackName,
+            icon: item.artworkUrl512 || item.artworkUrl100,
+            description: item.description ? item.description.substring(0, 180) + '...' : item.trackName,
+            version: 'v' + (item.version || '1.0'),
+            size: mbSize
+          };
+        }
+      }
+    }
+
+    if (fetchedData) {
+      document.getElementById('adminTitle').value = fetchedData.title;
+      if (fetchedData.icon) document.getElementById('adminIcon').value = fetchedData.icon;
+      if (fetchedData.description) document.getElementById('adminDesc').value = fetchedData.description;
+      if (fetchedData.version) document.getElementById('adminVersion').value = fetchedData.version;
+      if (fetchedData.size) document.getElementById('adminSize').value = fetchedData.size;
+
+      if (statusEl) {
+        statusEl.textContent = "✅ ¡Campos autocompletados con éxito desde la tienda!";
+        statusEl.className = "text-xs mt-2 text-green-400 font-bold block";
+      }
+    } else {
+      throw new Error("No se pudieron extraer datos automáticos para esa app.");
+    }
+  } catch (err) {
+    console.warn("AutoFetch Error:", err);
+    if (statusEl) {
+      statusEl.textContent = "⚠️ " + (err.message || "No se pudo obtener información automática. Puedes completar manualmente.");
+      statusEl.className = "text-xs mt-2 text-amber-400 font-medium block";
+    }
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 async function saveGame() {

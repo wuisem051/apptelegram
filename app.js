@@ -116,7 +116,7 @@ async function fetchLocalJsonGames() {
  */
 function renderCategories() {
   const container = document.getElementById('categoryContainer');
-  const customCategories = ['Todos', 'Nuevo', 'Apps', 'Games', 'Sin internet'];
+  const customCategories = ['Todos', 'Nuevo', 'Apps', 'Games', 'Sin internet', '32 Bits', '64 Bits'];
 
   container.innerHTML = customCategories.map(cat => `
     <button 
@@ -162,6 +162,10 @@ function renderGames() {
       matchesCategory = gameCat.includes('game') || gameCat.includes('juego') || gameCat.includes('rpg') || gameCat.includes('acción') || gameCat.includes('accion');
     } else if (cat === 'sin internet') {
       matchesCategory = gameCat.includes('offline') || gameCat.includes('sin internet');
+    } else if (cat === '32 bits') {
+      matchesCategory = gameCat.includes('32 bits') || gameCat.includes('32bit') || gameCat.includes('32-bit') || gameCat === '32 bits';
+    } else if (cat === '64 bits') {
+      matchesCategory = gameCat.includes('64 bits') || gameCat.includes('64bit') || gameCat.includes('64-bit') || gameCat === '64 bits';
     } else {
       matchesCategory = gameCat === cat;
     }

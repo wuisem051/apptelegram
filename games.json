@@ -64,5 +64,27 @@
     "icon": "https://images.unsplash.com/photo-1511512578047-dfb367046420?auto=format&fit=crop&w=150&q=80",
     "description": "Compite contra 32 jugadores eliminándote ronda tras ronda. Mod con todas las pisadas, gestos y pieles desbloqueadas.",
     "downloadUrl": "https://example.com/download/stumble-guys-mod.apk"
+  },
+  {
+    "id": 7,
+    "title": "Minecraft Pocket Edition (32 Bits)",
+    "category": "32 Bits",
+    "size": "140 MB",
+    "version": "v1.20.10",
+    "androidReq": "Android 5.0+",
+    "icon": "https://images.unsplash.com/photo-1627856013091-fed6e4e30025?auto=format&fit=crop&w=150&q=80",
+    "description": "Versión optimizada compatible con procesadores y dispositivos antiguos de arquitectura 32 bits.",
+    "downloadUrl": "https://example.com/download/minecraft-32bit.apk"
+  },
+  {
+    "id": 8,
+    "title": "BitLife - Simulador de Vida (64 Bits)",
+    "category": "64 Bits",
+    "size": "150 MB",
+    "version": "v1.19",
+    "androidReq": "Android 7.0+",
+    "icon": "https://play-lh.googleusercontent.com/5j7akLeqOiKbGISE5hJ3v-k8J-J7H4O0P9X_g3y",
+    "description": "Simulador de vida interactivo optimizado para procesadores de 64 bits con máxima fluidez.",
+    "downloadUrl": "https://drive.google.com/file/d/1NEW9Lnw3ccNzabNO85"
   }
 ]

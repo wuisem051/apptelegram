@@ -112,6 +112,20 @@
               <i class="fa-solid fa-plus-circle text-green-400"></i> Publicar Nuevo Juego / App
             </h3>
 
+            <!-- Herramienta de Autocompletado / Importador Play Store -->
+            <div class="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 mb-6">
+              <h4 class="font-bold text-xs text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <i class="fa-brands fa-google-play text-green-400"></i> Autocompletar Post desde Enlace / Nombre
+              </h4>
+              <div class="flex gap-2">
+                <input type="text" id="autoFetchQuery" placeholder="Pega el link de la app en Play Store o su nombre (ej: https://play.google.com/store/apps/details?id=...)" class="w-full bg-slate-900 border border-slate-700/70 rounded-xl px-4 py-2.5 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-green-500">
+                <button type="button" id="autoFetchBtn" class="px-5 py-2.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 font-bold text-xs rounded-xl flex items-center gap-2 whitespace-nowrap transition-colors">
+                  <i class="fa-solid fa-wand-magic-sparkles"></i> Obtener Datos
+                </button>
+              </div>
+              <p id="autoFetchStatus" class="hidden text-xs mt-2 text-slate-400"></p>
+            </div>
+
             <form id="adminGameForm" class="space-y-4">
               <input type="hidden" id="adminFormId">
 
@@ -127,6 +141,8 @@
                     <option value="Apps">Apps</option>
                     <option value="Games">Games</option>
                     <option value="Sin internet">Sin internet</option>
+                    <option value="32 Bits">32 Bits</option>
+                    <option value="64 Bits">64 Bits</option>
                   </select>
                 </div>
               </div>
