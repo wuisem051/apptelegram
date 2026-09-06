@@ -254,21 +254,23 @@ function startTimer(seconds) {
 }
 
 /**
- * 7. Monetag & Redirección
+ * 7. Monetag & Redirección Final de Descarga
  */
 function executeMonetagAndDownload() {
   if (!currentGameForDownload) return;
 
-  if (typeof show_monetag === 'function') {
-    show_monetag().then(() => {
+  // Disparar anuncio de Monetag Rewarded Popup (Zona: 11738612)
+  if (typeof show_11738612 === 'function') {
+    show_11738612('pop').then(() => {
+      // El usuario vio el anuncio correctamente o lo cerró -> liberar descarga
       openDownloadLink();
-    }).catch(() => {
+    }).catch((e) => {
+      console.warn('Error o rechazo en anuncio Monetag:', e);
+      // Abrir descarga incluso si falla el anuncio para no bloquear la experiencia
       openDownloadLink();
     });
   } else {
-    if (MONETAG_SMARTLINK_URL && !MONETAG_SMARTLINK_URL.includes("YOUR_SMARTLINK_ID")) {
-      window.open(MONETAG_SMARTLINK_URL, '_blank');
-    }
+    // Fallback en caso de que no haya cargado el SDK
     openDownloadLink();
   }
 }
