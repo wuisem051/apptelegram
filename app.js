@@ -36,29 +36,32 @@ function initTelegramSDK() {
 }
 
 /**
- * 2. Cargar Juegos (localStorage prioridad + games.json fallback)
+ * 2. Cargar Juegos (Sincronización Inteligente de Cuestiones JSON + localStorage)
  */
 async function loadGames() {
+  let jsonGames = [];
+  try {
+    const response = await fetch('./games.json?v=' + Date.now());
+    if (response.ok) {
+      jsonGames = await response.json();
+    }
+  } catch (error) {
+    console.warn('Error cargando games.json remoto:', error);
+  }
+
   const localData = localStorage.getItem('apk_store_games');
   if (localData) {
     try {
-      games = JSON.parse(localData);
-      renderCategories();
-      renderGames();
-      return;
+      const localGames = JSON.parse(localData);
+      // Combinar juegos manteniendo cambios locales y agregando los nuevos del JSON si no existen
+      const localIds = new Set(localGames.map(g => g.id));
+      const newFromJSON = jsonGames.filter(g => !localIds.has(g.id));
+      games = [...localGames, ...newFromJSON];
     } catch (e) {
-      console.warn('Error leyendo localStorage:', e);
+      games = jsonGames;
     }
-  }
-
-  try {
-    const response = await fetch('./games.json');
-    if (!response.ok) throw new Error('Error al cargar games.json');
-    games = await response.json();
-    saveGamesToStorage();
-  } catch (error) {
-    console.warn('Cargando catálogo local de respaldo:', error);
-    games = [
+  } else {
+    games = jsonGames.length > 0 ? jsonGames : [
       {
         id: 1,
         title: "Subway Surfers (MOD Dinero)",
@@ -69,22 +72,11 @@ async function loadGames() {
         icon: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=150&q=80",
         description: "Corre a toda velocidad escapando del inspector. Modificación con dinero, monedas e llaves ilimitadas para desbloquear todos los personajes.",
         downloadUrl: "https://example.com/download/subway-surfers-mod.apk"
-      },
-      {
-        id: 2,
-        title: "Genshin Impact APK",
-        category: "RPG",
-        size: "650 MB",
-        version: "v4.2.0",
-        androidReq: "Android 8.0+",
-        icon: "https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=150&q=80",
-        description: "Explora Teyvat en este fascinante juego RPG de mundo abierto. Gráficos de consola optimizados para celulares de gama media y alta.",
-        downloadUrl: "https://example.com/download/genshin-impact.apk"
       }
     ];
-    saveGamesToStorage();
   }
 
+  saveGamesToStorage();
   renderCategories();
   renderGames();
 }
