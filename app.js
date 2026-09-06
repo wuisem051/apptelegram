@@ -42,6 +42,11 @@ document.addEventListener('DOMContentLoaded', () => {
   loadGames();
   setupEventListeners();
   setupAdminListeners();
+
+  // Auto-recargar el catálogo cada 15 segundos para sincronizar cambios
+  setInterval(() => {
+    loadGames();
+  }, 15000);
 });
 
 /**
@@ -64,34 +69,27 @@ function initTelegramSDK() {
  */
 async function loadGames() {
   if (db) {
-    db.collection("games").onSnapshot(async (snapshot) => {
+    db.collection("games").get().then(async (snapshot) => {
       const fbGames = [];
       snapshot.forEach((doc) => {
         fbGames.push({ docId: doc.id, ...doc.data() });
       });
 
-      // Obtener además los juegos de games.json para asegurar catálogo inicial
       let baseJsonGames = [];
       try {
         const res = await fetch('./games.json?v=' + Date.now());
         if (res.ok) baseJsonGames = await res.json();
       } catch(e) {}
 
-      // Combinar los de Firebase (tienen prioridad) con los de games.json
       const map = new Map();
       baseJsonGames.forEach(g => map.set(g.id, g));
       fbGames.forEach(g => map.set(g.id || g.docId, g));
 
       games = Array.from(map.values());
-
-      activeCategory = 'Todos';
       renderCategories();
       renderGames();
-      if (document.getElementById('adminPanelModal')?.classList.contains('opacity-0') === false) {
-        renderAdminGamesList();
-      }
-    }, (error) => {
-      console.warn("Error en la escucha de Firestore:", error);
+    }).catch((error) => {
+      console.warn("Error leyendo Firestore:", error);
       fetchLocalJsonGames();
     });
   } else {
@@ -114,13 +112,13 @@ async function fetchLocalJsonGames() {
 }
 
 /**
- * 3. Renderizado de Categorías
+ * 3. Renderizado de Categorías Solicitadas: Todos, Nuevo, Apps, Games, Sin internet
  */
 function renderCategories() {
   const container = document.getElementById('categoryContainer');
-  const categories = ['Todos', ...new Set(games.map(g => g.category))];
+  const customCategories = ['Todos', 'Nuevo', 'Apps', 'Games', 'Sin internet'];
 
-  container.innerHTML = categories.map(cat => `
+  container.innerHTML = customCategories.map(cat => `
     <button 
       class="category-btn whitespace-nowrap px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
         cat === activeCategory 
@@ -150,9 +148,27 @@ function renderGames() {
   const gameCount = document.getElementById('gameCount');
 
   const filtered = games.filter(game => {
-    const matchesCategory = activeCategory === 'Todos' || game.category === activeCategory;
+    let matchesCategory = false;
+    const cat = activeCategory.toLowerCase();
+    const gameCat = (game.category || '').toLowerCase();
+
+    if (activeCategory === 'Todos') {
+      matchesCategory = true;
+    } else if (cat === 'nuevo') {
+      matchesCategory = gameCat.includes('nuevo') || gameCat.includes('mod') || game.isNew === true;
+    } else if (cat === 'apps') {
+      matchesCategory = gameCat.includes('app') || gameCat.includes('aplicacion');
+    } else if (cat === 'games') {
+      matchesCategory = gameCat.includes('game') || gameCat.includes('juego') || gameCat.includes('rpg') || gameCat.includes('acción') || gameCat.includes('accion');
+    } else if (cat === 'sin internet') {
+      matchesCategory = gameCat.includes('offline') || gameCat.includes('sin internet');
+    } else {
+      matchesCategory = gameCat === cat;
+    }
+
     const matchesSearch = game.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          game.category.toLowerCase().includes(searchQuery.toLowerCase());
+                          gameCat.includes(searchQuery.toLowerCase());
+
     return matchesCategory && matchesSearch;
   });
 
