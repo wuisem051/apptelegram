@@ -126,10 +126,10 @@ function initAdminData() {
       loadAnalyticsFromSnapshot(snapshot);
     }, err => {
       console.warn("Snapshot con ordenamiento falló, usando consulta simple:", err);
-      db.collection("downloads").limit(100).onSnapshot(snap => loadAnalyticsFromSnapshot(snap));
+      db.collection("downloads").onSnapshot(snap => loadAnalyticsFromSnapshot(snap));
     });
   } catch(e) {
-    db.collection("downloads").limit(100).get().then(snap => loadAnalyticsFromSnapshot(snap));
+    db.collection("downloads").get().then(snap => loadAnalyticsFromSnapshot(snap));
   }
 
   loadHeaderSettings();
@@ -589,7 +589,12 @@ async function saveStepSettings() {
 async function loadAnalytics() {
   if (!db) return;
   try {
-    const snapshot = await db.collection("downloads").orderBy("timestamp", "desc").limit(100).get();
+    let snapshot;
+    try {
+      snapshot = await db.collection("downloads").orderBy("timestamp", "desc").get();
+    } catch (e) {
+      snapshot = await db.collection("downloads").get();
+    }
     loadAnalyticsFromSnapshot(snapshot);
   } catch (err) {
     console.error("Error al cargar analíticas:", err);
@@ -617,6 +622,7 @@ function loadAnalyticsFromSnapshot(snapshot) {
   // Ordenar por fecha descendente en cliente (más reciente primero)
   logs.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
+  // Mostrar la cantidad real total de descargas de la base de datos
   totalCountEl.textContent = logs.length;
 
   let maxC = 0;
@@ -634,7 +640,10 @@ function loadAnalyticsFromSnapshot(snapshot) {
     return;
   }
 
-  logsContainer.innerHTML = logs.map(log => `
+  // Limitar únicamente la lista de registros renderizados en HTML a los 100 más recientes
+  const recentLogs = logs.slice(0, 100);
+
+  logsContainer.innerHTML = recentLogs.map(log => `
     <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition-colors">
       <div class="min-w-0">
         <h4 class="font-bold text-slate-100 truncate">${log.gameTitle}</h4>
