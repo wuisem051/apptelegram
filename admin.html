@@ -210,7 +210,7 @@
 
         </section>
 
-        <!-- VISTA 2: PERSONALIZAR TITULO Y ESLOGAN DE LA MINI APP -->
+        <!-- VISTA 2: PERSONALIZAR TITULO, ESLOGAN Y PASO DE DESBLOQUEO -->
         <section id="viewSettings" class="hidden space-y-6">
           <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
             <h3 class="font-extrabold text-slate-100 text-base mb-4 flex items-center gap-2">
@@ -230,6 +230,31 @@
 
               <button type="submit" class="w-full py-3 bg-green-500 hover:bg-green-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all">
                 Actualizar Encabezado en Telegram
+              </button>
+            </form>
+          </div>
+
+          <!-- Configuración de Paso Intermedio / Enlace Publicidad -->
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <h3 class="font-extrabold text-slate-100 text-base mb-1 flex items-center gap-2">
+              <i class="fa-solid fa-link text-amber-400"></i> Configuración de Paso de Desbloqueo (Publicidad)
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Define el enlace al que serán redirigidos los usuarios para hacer clic en la publicidad y desbloquear la APK.</p>
+
+            <form id="stepSettingsForm" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Enlace del Paso / Blogspot / Publicidad (URL)</label>
+                <input type="url" id="stepUrlInput" required placeholder="https://wuiprooficial.blogspot.com/p/..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-amber-500">
+                <p class="text-[11px] text-slate-500 mt-1">Por defecto: https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Imagen de Tutorial / Ejemplo (Opcional)</label>
+                <input type="url" id="stepImageUrlInput" placeholder="https://... (Dejar en blanco para usar la guía visual por defecto)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-amber-500">
+              </div>
+
+              <button type="submit" class="w-full py-3 bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-amber-500/20 active:scale-95 transition-all">
+                Guardar Enlace de Desbloqueo
               </button>
             </form>
           </div>

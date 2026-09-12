@@ -144,6 +144,12 @@ function setupForms() {
     await saveHeaderSettings();
   });
 
+  const stepSettingsForm = document.getElementById('stepSettingsForm');
+  stepSettingsForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveStepSettings();
+  });
+
   copyFullJsonBtn.addEventListener('click', () => {
     const cleanGames = gamesList.map(g => {
       const { docId, createdAt, ...rest } = g;
@@ -515,8 +521,19 @@ async function loadHeaderSettings() {
       if (data.title) document.getElementById('headerTitleInput').value = data.title;
       if (data.subtitle) document.getElementById('headerSubtitleInput').value = data.subtitle;
     }
+
+    const stepDoc = await db.collection("settings").doc("stepConfig").get();
+    const stepUrlInput = document.getElementById('stepUrlInput');
+    const stepImageUrlInput = document.getElementById('stepImageUrlInput');
+    if (stepDoc.exists) {
+      const stepData = stepDoc.data();
+      if (stepUrlInput) stepUrlInput.value = stepData.stepUrl || 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html';
+      if (stepImageUrlInput) stepImageUrlInput.value = stepData.stepImageUrl || '';
+    } else {
+      if (stepUrlInput) stepUrlInput.value = 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html';
+    }
   } catch (e) {
-    console.warn("Error leyendo header settings:", e);
+    console.warn("Error leyendo header y step settings:", e);
   }
 }
 
@@ -530,6 +547,27 @@ async function saveHeaderSettings() {
     alert("¡Título y subtítulo de la Mini App actualizados con éxito!");
   } catch (e) {
     alert("Error al guardar ajustes: " + e.message);
+  }
+}
+
+async function saveStepSettings() {
+  const stepUrl = document.getElementById('stepUrlInput')?.value.trim();
+  const stepImageUrl = document.getElementById('stepImageUrlInput')?.value.trim() || '';
+
+  if (!db) {
+    alert("Error: Firebase no está conectado.");
+    return;
+  }
+
+  try {
+    await db.collection("settings").doc("stepConfig").set({
+      stepUrl: stepUrl || 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html',
+      stepImageUrl: stepImageUrl,
+      updatedAt: new Date().toISOString()
+    });
+    alert("¡Enlace de desbloqueo (paso de publicidad) guardado con éxito!");
+  } catch (e) {
+    alert("Error al guardar ajustes del paso: " + e.message);
   }
 }
 

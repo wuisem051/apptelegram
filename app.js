@@ -10,6 +10,13 @@ let currentTimer = null;
 let currentGameForDownload = null;
 let db = null;
 
+// Configuración de Paso Intermedio (Publicidad / Desbloqueo)
+let stepConfig = {
+  stepUrl: 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html',
+  stepImageUrl: ''
+};
+let stepCountdownTimer = null;
+
 // Configuración de Admin Password & Monetag
 const ADMIN_PASSWORD = "admin";
 
@@ -42,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadGames();
   setupEventListeners();
   setupAdminListeners();
+  setupStepListeners();
 
   // Auto-recargar el catálogo cada 15 segundos para sincronizar cambios
   setInterval(() => {
@@ -308,10 +316,117 @@ function startTimer(seconds) {
 }
 
 /**
- * 7. Descarga Directa Limpia (Sin Anuncios)
+ * 7. Paso Intermedio de Publicidad antes de la Descarga Final
  */
 function executeMonetagAndDownload() {
-  openDownloadLink();
+  closeModal();
+  openStepModal();
+}
+
+function openStepModal() {
+  const stepModal = document.getElementById('stepModal');
+  const stepModalContainer = document.getElementById('stepModalContainer');
+  const stepFinalDownloadBtn = document.getElementById('stepFinalDownloadBtn');
+  const stepCountdownBox = document.getElementById('stepCountdownBox');
+  const stepTutorialImage = document.getElementById('stepTutorialImage');
+  const stepDefaultGuide = document.getElementById('stepDefaultGuide');
+
+  if (!stepModal) return;
+
+  // Resetear temporizador y estado
+  if (stepCountdownTimer) clearInterval(stepCountdownTimer);
+  stepCountdownBox?.classList.add('hidden');
+  
+  if (stepFinalDownloadBtn) {
+    stepFinalDownloadBtn.disabled = true;
+    stepFinalDownloadBtn.className = "w-full py-3.5 px-4 bg-slate-800 text-slate-500 font-extrabold text-sm rounded-xl border border-slate-700 flex items-center justify-center gap-2 transition-all cursor-not-allowed";
+    stepFinalDownloadBtn.innerHTML = '<i class="fa-solid fa-lock"></i> 2️⃣ Descargar APK Ahora (Bloqueado)';
+  }
+
+  // Cargar imagen instructiva o guía por defecto
+  if (stepConfig.stepImageUrl && stepTutorialImage) {
+    stepTutorialImage.src = stepConfig.stepImageUrl;
+    stepTutorialImage.classList.remove('hidden');
+    if (stepDefaultGuide) stepDefaultGuide.classList.add('hidden');
+  } else {
+    if (stepTutorialImage) stepTutorialImage.classList.add('hidden');
+    if (stepDefaultGuide) stepDefaultGuide.classList.remove('hidden');
+  }
+
+  // Mostrar modal
+  stepModal.classList.remove('opacity-0', 'pointer-events-none');
+  stepModalContainer?.classList.remove('translate-y-full');
+}
+
+function closeStepModal() {
+  if (stepCountdownTimer) clearInterval(stepCountdownTimer);
+  const stepModal = document.getElementById('stepModal');
+  const stepModalContainer = document.getElementById('stepModalContainer');
+  if (stepModalContainer) stepModalContainer.classList.add('translate-y-full');
+  if (stepModal) stepModal.classList.add('opacity-0', 'pointer-events-none');
+}
+
+function setupStepListeners() {
+  const closeStepModalBtn = document.getElementById('closeStepModalBtn');
+  const stepModal = document.getElementById('stepModal');
+  const stepGoToPageBtn = document.getElementById('stepGoToPageBtn');
+  const stepFinalDownloadBtn = document.getElementById('stepFinalDownloadBtn');
+
+  closeStepModalBtn?.addEventListener('click', closeStepModal);
+  stepModal?.addEventListener('click', (e) => {
+    if (e.target === stepModal) closeStepModal();
+  });
+
+  stepGoToPageBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    const url = stepConfig.stepUrl || 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html';
+    
+    if (window.Telegram?.WebApp?.openLink) {
+      window.Telegram.WebApp.openLink(url);
+    } else {
+      window.open(url, '_blank');
+    }
+
+    startStepCountdown(4);
+  });
+
+  stepFinalDownloadBtn?.addEventListener('click', () => {
+    if (stepFinalDownloadBtn.disabled) return;
+    closeStepModal();
+    openDownloadLink();
+  });
+}
+
+function startStepCountdown(seconds) {
+  const stepCountdownBox = document.getElementById('stepCountdownBox');
+  const stepTimerCount = document.getElementById('stepTimerCount');
+  const stepFinalDownloadBtn = document.getElementById('stepFinalDownloadBtn');
+  
+  if (stepCountdownTimer) clearInterval(stepCountdownTimer);
+  stepCountdownBox?.classList.remove('hidden');
+
+  let timeLeft = seconds;
+  if (stepTimerCount) stepTimerCount.textContent = timeLeft;
+
+  stepCountdownTimer = setInterval(() => {
+    timeLeft--;
+    if (stepTimerCount) stepTimerCount.textContent = timeLeft;
+
+    if (timeLeft <= 0) {
+      clearInterval(stepCountdownTimer);
+      stepCountdownBox?.classList.add('hidden');
+
+      if (stepFinalDownloadBtn) {
+        stepFinalDownloadBtn.disabled = false;
+        stepFinalDownloadBtn.className = "w-full py-3.5 px-4 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-green-500/25 flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer animate-bounce";
+        stepFinalDownloadBtn.innerHTML = '<i class="fa-solid fa-circle-check text-base"></i> 2️⃣ 🔓 ¡Descargar APK Desbloqueada Ahora!';
+      }
+
+      if (window.Telegram?.WebApp?.HapticFeedback) {
+        window.Telegram.WebApp.HapticFeedback.notificationOccurred('success');
+      }
+    }
+  }, 1000);
 }
 
 /**
@@ -487,8 +602,15 @@ async function loadAppSettings() {
           document.getElementById('settingSubtitle').value = data.subtitle;
         }
       }
+
+      const stepDoc = await db.collection("settings").doc("stepConfig").get();
+      if (stepDoc.exists) {
+        const stepData = stepDoc.data();
+        if (stepData.stepUrl) stepConfig.stepUrl = stepData.stepUrl;
+        if (stepData.stepImageUrl) stepConfig.stepImageUrl = stepData.stepImageUrl;
+      }
     } catch (e) {
-      console.warn("Error cargando ajustes del header:", e);
+      console.warn("Error cargando ajustes del header y paso:", e);
     }
   }
 }

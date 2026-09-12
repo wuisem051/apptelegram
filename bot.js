@@ -11,10 +11,10 @@
 const { Telegraf, Markup } = require('telegraf');
 
 // Reemplazar con el token entregado por @BotFather o una variable de entorno
-const BOT_TOKEN = process.env.BOT_TOKEN || 'TU_BOT_TOKEN_AQUI';
+const BOT_TOKEN = process.env.BOT_TOKEN || '8839459663:AAG23TmMATMuby0CC-DCqrtcahucRPBqOfg';
 
 // Reemplazar con la URL final de tu Mini App alojada (Netlify, Vercel o Cloudflare Pages)
-const WEB_APP_URL = process.env.WEB_APP_URL || 'https://tu-mini-app.netlify.app';
+const WEB_APP_URL = process.env.WEB_APP_URL || 'https://inyectorytapp.netlify.app/';
 
 if (BOT_TOKEN === 'TU_BOT_TOKEN_AQUI') {
   console.warn('⚠️ ADVERTENCIA: Configura BOT_TOKEN con tu token real de @BotFather.');
@@ -31,7 +31,7 @@ bot.start((ctx) => {
     `Explora y descarga los mejores juegos, mods y aplicaciones para Android de manera rápida y segura.\n\n` +
     `Haz clic en el botón de abajo para abrir la tienda:`;
 
-  return ctx.replyWithMarkdown(welcomeMessage, 
+  return ctx.replyWithMarkdown(welcomeMessage,
     Markup.inlineKeyboard([
       [
         Markup.button.webApp('🚀 Abrir Catálogo APK', WEB_APP_URL)
