@@ -120,10 +120,17 @@ function initAdminData() {
     renderAdminGamesTable();
   }, err => console.error("Error al escuchar games:", err));
 
-  // Escuchar descargas en tiempo real
-  db.collection("downloads").orderBy("timestamp", "desc").limit(100).onSnapshot(snapshot => {
-    loadAnalyticsFromSnapshot(snapshot);
-  }, err => console.warn("Error al escuchar descargas en tiempo real:", err));
+  // Escuchar descargas en tiempo real (con fallback robusto por si falta índice en Firestore)
+  try {
+    db.collection("downloads").onSnapshot(snapshot => {
+      loadAnalyticsFromSnapshot(snapshot);
+    }, err => {
+      console.warn("Snapshot con ordenamiento falló, usando consulta simple:", err);
+      db.collection("downloads").limit(100).onSnapshot(snap => loadAnalyticsFromSnapshot(snap));
+    });
+  } catch(e) {
+    db.collection("downloads").limit(100).get().then(snap => loadAnalyticsFromSnapshot(snap));
+  }
 
   loadHeaderSettings();
 }
@@ -606,6 +613,9 @@ function loadAnalyticsFromSnapshot(snapshot) {
       countryMap[data.country] = (countryMap[data.country] || 0) + 1;
     }
   });
+
+  // Ordenar por fecha descendente en cliente (más reciente primero)
+  logs.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
 
   totalCountEl.textContent = logs.length;
 

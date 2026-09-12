@@ -392,6 +392,9 @@ function setupStepListeners() {
 
   stepFinalDownloadBtn?.addEventListener('click', () => {
     if (stepFinalDownloadBtn.disabled) return;
+    if (currentGameForDownload) {
+      trackDownload(currentGameForDownload);
+    }
     closeStepModal();
     openDownloadLink();
   });
@@ -433,39 +436,63 @@ function startStepCountdown(seconds) {
  * 8. Registrar Descarga en Analíticas de Firebase
  */
 async function trackDownload(game) {
-  if (!game) return;
+  if (!game || !db) return;
+
+  const now = new Date();
+  const downloadLog = {
+    gameId: game.id || Date.now(),
+    gameTitle: game.title || "Juego APK",
+    country: "Desconocido",
+    countryFlag: "🌐",
+    timestamp: now.toISOString(),
+    timeFormatted: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    dateFormatted: now.toLocaleDateString()
+  };
 
   try {
-    // Obtener País e IP del usuario mediante API gratuita ipapi.co
-    let country = "Desconocido";
-    let countryCode = "🌐";
-    try {
-      const geoRes = await fetch('https://ipapi.co/json/');
-      if (geoRes.ok) {
-        const geoData = await geoRes.json();
-        country = geoData.country_name || "Desconocido";
-        countryCode = geoData.country_code ? `https://flagcdn.com/24x18/${geoData.country_code.toLowerCase()}.png` : "🌐";
+    // 1. Guardar de INMEDIATO en Firestore sin bloquear la navegación
+    const docRef = await db.collection("downloads").add(downloadLog);
+
+    // 2. Intentar obtener el país de fondo sin bloquear el hilo principal (timeout 1.5s)
+    fetchGeoCountryWithTimeout(1500).then(geo => {
+      if (geo && geo.country && docRef) {
+        docRef.update({
+          country: geo.country,
+          countryFlag: geo.countryFlag
+        }).catch(() => {});
       }
-    } catch (e) {
-      console.warn("Geo IP fetch error:", e);
-    }
+    }).catch(() => {});
 
-    const downloadLog = {
-      gameId: game.id || 0,
-      gameTitle: game.title,
-      country: country,
-      countryFlag: countryCode,
-      timestamp: new Date().toISOString(),
-      timeFormatted: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      dateFormatted: new Date().toLocaleDateString()
-    };
-
-    if (db) {
-      await db.collection("downloads").add(downloadLog);
-    }
   } catch (err) {
-    console.warn("Error tracking download:", err);
+    console.warn("Error guardando analítica de descarga:", err);
   }
+}
+
+async function fetchGeoCountryWithTimeout(ms) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), ms);
+
+  try {
+    const res = await fetch('https://ipapi.co/json/', { signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (res.ok) {
+      const data = await res.json();
+      const country = data.country_name || "Desconocido";
+      const flag = data.country_code ? `https://flagcdn.com/24x18/${data.country_code.toLowerCase()}.png` : "🌐";
+      return { country, countryFlag: flag };
+    }
+  } catch (e) {
+    try {
+      const res2 = await fetch('https://ip-api.com/json/?fields=country,countryCode', { signal: AbortSignal.timeout(1000) });
+      if (res2.ok) {
+        const data2 = await res2.json();
+        const country = data2.country || "Desconocido";
+        const flag = data2.countryCode ? `https://flagcdn.com/24x18/${data2.countryCode.toLowerCase()}.png` : "🌐";
+        return { country, countryFlag: flag };
+      }
+    } catch(e2) {}
+  }
+  return null;
 }
 
 function openDownloadLink() {
