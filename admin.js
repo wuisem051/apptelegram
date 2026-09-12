@@ -120,6 +120,11 @@ function initAdminData() {
     renderAdminGamesTable();
   }, err => console.error("Error al escuchar games:", err));
 
+  // Escuchar descargas en tiempo real
+  db.collection("downloads").orderBy("timestamp", "desc").limit(100).onSnapshot(snapshot => {
+    loadAnalyticsFromSnapshot(snapshot);
+  }, err => console.warn("Error al escuchar descargas en tiempo real:", err));
+
   loadHeaderSettings();
 }
 
@@ -572,65 +577,65 @@ async function saveStepSettings() {
 }
 
 /**
- * 6. Analíticas & Registros por País
+ * 6. Analíticas & Registros por País en Tiempo Real
  */
 async function loadAnalytics() {
+  if (!db) return;
+  try {
+    const snapshot = await db.collection("downloads").orderBy("timestamp", "desc").limit(100).get();
+    loadAnalyticsFromSnapshot(snapshot);
+  } catch (err) {
+    console.error("Error al cargar analíticas:", err);
+  }
+}
+
+function loadAnalyticsFromSnapshot(snapshot) {
   const logsContainer = document.getElementById('analyticsLogsContainer');
   const totalCountEl = document.getElementById('analyticsTotalCount');
   const topCountryEl = document.getElementById('analyticsTopCountry');
 
-  if (!db) {
-    logsContainer.innerHTML = '<p class="text-slate-500">Conecta Firebase para ver analíticas.</p>';
+  if (!logsContainer || !totalCountEl || !topCountryEl) return;
+
+  const logs = [];
+  const countryMap = {};
+
+  snapshot.forEach(doc => {
+    const data = doc.data();
+    logs.push(data);
+    if (data.country) {
+      countryMap[data.country] = (countryMap[data.country] || 0) + 1;
+    }
+  });
+
+  totalCountEl.textContent = logs.length;
+
+  let maxC = 0;
+  let topC = "-";
+  Object.keys(countryMap).forEach(c => {
+    if (countryMap[c] > maxC) {
+      maxC = countryMap[c];
+      topC = `${c} (${maxC} descargas)`;
+    }
+  });
+  topCountryEl.textContent = topC;
+
+  if (logs.length === 0) {
+    logsContainer.innerHTML = '<p class="text-sm text-slate-500 py-4 text-center">Aún no hay descargas registradas.</p>';
     return;
   }
 
-  try {
-    const snapshot = await db.collection("downloads").orderBy("timestamp", "desc").limit(100).get();
-    const logs = [];
-    const countryMap = {};
-
-    snapshot.forEach(doc => {
-      const data = doc.data();
-      logs.push(data);
-      if (data.country) {
-        countryMap[data.country] = (countryMap[data.country] || 0) + 1;
-      }
-    });
-
-    totalCountEl.textContent = logs.length;
-
-    let maxC = 0;
-    let topC = "-";
-    Object.keys(countryMap).forEach(c => {
-      if (countryMap[c] > maxC) {
-        maxC = countryMap[c];
-        topC = `${c} (${maxC} descargas)`;
-      }
-    });
-    topCountryEl.textContent = topC;
-
-    if (logs.length === 0) {
-      logsContainer.innerHTML = '<p class="text-sm text-slate-500 py-4 text-center">Aún no hay descargas registradas.</p>';
-      return;
-    }
-
-    logsContainer.innerHTML = logs.map(log => `
-      <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
-        <div class="min-w-0">
-          <h4 class="font-bold text-slate-100 truncate">${log.gameTitle}</h4>
-          <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
-            ${log.countryFlag && log.countryFlag.startsWith('http') ? `<img src="${log.countryFlag}" class="w-4 h-3 rounded shadow-sm inline">` : '🌐'}
-            <span class="font-semibold text-slate-300">${log.country}</span>
-          </p>
-        </div>
-        <span class="px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 font-bold text-xs rounded-xl whitespace-nowrap">
-          ${log.timeFormatted} (${log.dateFormatted})
-        </span>
+  logsContainer.innerHTML = logs.map(log => `
+    <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition-colors">
+      <div class="min-w-0">
+        <h4 class="font-bold text-slate-100 truncate">${log.gameTitle}</h4>
+        <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
+          ${log.countryFlag && log.countryFlag.startsWith('http') ? `<img src="${log.countryFlag}" class="w-4 h-3 rounded shadow-sm inline">` : '🌐'}
+          <span class="font-semibold text-slate-300">${log.country}</span>
+        </p>
       </div>
-    `).join('');
-
-  } catch (err) {
-    console.error("Error al cargar analíticas:", err);
-    logsContainer.innerHTML = '<p class="text-sm text-red-400 py-4">Error al cargar historial de analíticas.</p>';
-  }
+      <span class="px-3 py-1 bg-green-500/10 text-green-400 border border-green-500/20 font-bold text-xs rounded-xl whitespace-nowrap">
+        ${log.timeFormatted} (${log.dateFormatted})
+      </span>
+    </div>
+  `).join('');
 }
