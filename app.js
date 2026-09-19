@@ -558,6 +558,9 @@ async function fetchGeoCountryWithTimeout(ms) {
       }
     } catch(e2) {}
   }
+  return null;
+}
+
 /**
  * Sistema de Control de Navegación (Atrás, Minimizado/Cierre de Mini App)
  */
