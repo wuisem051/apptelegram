@@ -10,9 +10,10 @@ let currentTimer = null;
 let currentGameForDownload = null;
 let db = null;
 
-// Configuración de Paso Intermedio (Publicidad / Desbloqueo)
+// Configuración de Paso Intermedio (Publicidad / Desbloqueo y Enlace Final)
 let stepConfig = {
-  stepUrl: 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html',
+  stepUrl: 'https://downyattainprojects.com/tvhen99v?key=eee65b92d7f3cff145392cb279dda8c5',
+  finalDownloadUrl: '',
   stepImageUrl: ''
 };
 let stepCountdownTimer = null;
@@ -47,6 +48,7 @@ if (typeof firebase !== 'undefined') {
 document.addEventListener('DOMContentLoaded', () => {
   initTelegramSDK();
   loadGames();
+  loadAppConfigFromFirestore();
   setupEventListeners();
   setupAdminListeners();
   setupStepListeners();
@@ -56,6 +58,38 @@ document.addEventListener('DOMContentLoaded', () => {
     loadGames();
   }, 15000);
 });
+
+/**
+ * Cargar configuraciones de Marca y Pasos de Desbloqueo desde Firebase en tiempo real
+ */
+function loadAppConfigFromFirestore() {
+  if (!db) return;
+
+  // Escuchar ajustes de encabezado
+  try {
+    db.collection("settings").doc("header").onSnapshot(doc => {
+      if (doc.exists) {
+        const data = doc.data();
+        const titleEl = document.getElementById('appHeaderTitle');
+        const subtitleEl = document.getElementById('appHeaderSubtitle');
+        if (titleEl && data.title) titleEl.textContent = data.title;
+        if (subtitleEl && data.subtitle) subtitleEl.textContent = data.subtitle;
+      }
+    }, err => console.warn("Error leyendo header settings:", err));
+  } catch(e) {}
+
+  // Escuchar ajustes del paso de desbloqueo y enlace final
+  try {
+    db.collection("settings").doc("stepConfig").onSnapshot(doc => {
+      if (doc.exists) {
+        const data = doc.data();
+        if (data.stepUrl) stepConfig.stepUrl = data.stepUrl;
+        stepConfig.finalDownloadUrl = data.finalDownloadUrl || '';
+        stepConfig.stepImageUrl = data.stepImageUrl || '';
+      }
+    }, err => console.warn("Error leyendo stepConfig settings:", err));
+  } catch(e) {}
+}
 
 /**
  * 1. Inicialización de Telegram WebApp SDK
@@ -379,7 +413,7 @@ function setupStepListeners() {
 
   stepGoToPageBtn?.addEventListener('click', (e) => {
     e.preventDefault();
-    const url = stepConfig.stepUrl || 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html';
+    const url = stepConfig.stepUrl || 'https://downyattainprojects.com/tvhen99v?key=eee65b92d7f3cff145392cb279dda8c5';
     
     if (window.Telegram?.WebApp?.openLink) {
       window.Telegram.WebApp.openLink(url);
@@ -496,11 +530,13 @@ async function fetchGeoCountryWithTimeout(ms) {
 }
 
 function openDownloadLink() {
-  if (currentGameForDownload && currentGameForDownload.downloadUrl) {
-    const url = currentGameForDownload.downloadUrl;
-    
-    // Registrar analítica en segundo plano
-    trackDownload(currentGameForDownload);
+  // Usar el enlace administrado del último paso si está configurado, o el del juego como alternativa
+  const url = stepConfig.finalDownloadUrl || (currentGameForDownload ? currentGameForDownload.downloadUrl : null);
+
+  if (url) {
+    if (currentGameForDownload) {
+      trackDownload(currentGameForDownload);
+    }
 
     if (window.Telegram?.WebApp?.openLink) {
       window.Telegram.WebApp.openLink(url);
@@ -634,6 +670,7 @@ async function loadAppSettings() {
       if (stepDoc.exists) {
         const stepData = stepDoc.data();
         if (stepData.stepUrl) stepConfig.stepUrl = stepData.stepUrl;
+        stepConfig.finalDownloadUrl = stepData.finalDownloadUrl || '';
         if (stepData.stepImageUrl) stepConfig.stepImageUrl = stepData.stepImageUrl;
       }
     } catch (e) {

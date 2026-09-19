@@ -536,13 +536,15 @@ async function loadHeaderSettings() {
 
     const stepDoc = await db.collection("settings").doc("stepConfig").get();
     const stepUrlInput = document.getElementById('stepUrlInput');
+    const stepFinalDownloadUrlInput = document.getElementById('stepFinalDownloadUrlInput');
     const stepImageUrlInput = document.getElementById('stepImageUrlInput');
     if (stepDoc.exists) {
       const stepData = stepDoc.data();
-      if (stepUrlInput) stepUrlInput.value = stepData.stepUrl || 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html';
+      if (stepUrlInput) stepUrlInput.value = stepData.stepUrl || 'https://downyattainprojects.com/tvhen99v?key=eee65b92d7f3cff145392cb279dda8c5';
+      if (stepFinalDownloadUrlInput) stepFinalDownloadUrlInput.value = stepData.finalDownloadUrl || '';
       if (stepImageUrlInput) stepImageUrlInput.value = stepData.stepImageUrl || '';
     } else {
-      if (stepUrlInput) stepUrlInput.value = 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html';
+      if (stepUrlInput) stepUrlInput.value = 'https://downyattainprojects.com/tvhen99v?key=eee65b92d7f3cff145392cb279dda8c5';
     }
   } catch (e) {
     console.warn("Error leyendo header y step settings:", e);
@@ -564,6 +566,7 @@ async function saveHeaderSettings() {
 
 async function saveStepSettings() {
   const stepUrl = document.getElementById('stepUrlInput')?.value.trim();
+  const finalDownloadUrl = document.getElementById('stepFinalDownloadUrlInput')?.value.trim() || '';
   const stepImageUrl = document.getElementById('stepImageUrlInput')?.value.trim() || '';
 
   if (!db) {
@@ -573,11 +576,12 @@ async function saveStepSettings() {
 
   try {
     await db.collection("settings").doc("stepConfig").set({
-      stepUrl: stepUrl || 'https://wuiprooficial.blogspot.com/p/la-usurpadora-donde-estan-sus-estrellas.html',
+      stepUrl: stepUrl || 'https://downyattainprojects.com/tvhen99v?key=eee65b92d7f3cff145392cb279dda8c5',
+      finalDownloadUrl: finalDownloadUrl,
       stepImageUrl: stepImageUrl,
       updatedAt: new Date().toISOString()
     });
-    alert("¡Enlace de desbloqueo (paso de publicidad) guardado con éxito!");
+    alert("¡Enlaces y ajustes del paso de descarga guardados con éxito!");
   } catch (e) {
     alert("Error al guardar ajustes del paso: " + e.message);
   }
