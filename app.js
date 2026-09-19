@@ -103,6 +103,9 @@ function initTelegramSDK() {
     if (tg.setHeaderColor) {
       tg.setHeaderColor('#0f172a');
     }
+    if (tg.BackButton) {
+      tg.BackButton.onClick(() => handleBackNavigation());
+    }
   }
 }
 
@@ -181,6 +184,7 @@ function renderCategories() {
       activeCategory = e.currentTarget.getAttribute('data-category');
       renderCategories();
       renderGames();
+      updateBackNavigationVisibility();
     });
   });
 }
@@ -260,19 +264,43 @@ function renderGames() {
  */
 function setupEventListeners() {
   const searchInput = document.getElementById('searchInput');
-  searchInput.addEventListener('input', (e) => {
+  searchInput?.addEventListener('input', (e) => {
     searchQuery = e.target.value;
     renderGames();
+    updateBackNavigationVisibility();
   });
 
-  document.getElementById('closeModalBtn').addEventListener('click', closeModal);
+  document.getElementById('closeModalBtn')?.addEventListener('click', closeModal);
+  document.getElementById('headerBackBtn')?.addEventListener('click', handleBackNavigation);
+  document.getElementById('minimizeAppBtn')?.addEventListener('click', minimizeOrCloseApp);
+
+  const floatingBackBtn = document.getElementById('floatingBackBtn');
+  floatingBackBtn?.addEventListener('click', () => {
+    if ((activeCategory && activeCategory !== 'Todos') || (searchQuery && searchQuery.trim() !== '')) {
+      handleBackNavigation();
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  });
+
+  window.addEventListener('scroll', () => {
+    if (floatingBackBtn) {
+      if (window.scrollY > 150) {
+        floatingBackBtn.classList.remove('hidden');
+        floatingBackBtn.classList.add('flex');
+      } else {
+        floatingBackBtn.classList.add('hidden');
+        floatingBackBtn.classList.remove('flex');
+      }
+    }
+  });
 
   const downloadModal = document.getElementById('downloadModal');
-  downloadModal.addEventListener('click', (e) => {
+  downloadModal?.addEventListener('click', (e) => {
     if (e.target === downloadModal) closeModal();
   });
 
-  document.getElementById('downloadBtn').addEventListener('click', executeMonetagAndDownload);
+  document.getElementById('downloadBtn')?.addEventListener('click', executeMonetagAndDownload);
 }
 
 /**
@@ -302,6 +330,7 @@ function openDownloadModal(gameId) {
   // Abrir modal
   downloadModal.classList.remove('opacity-0', 'pointer-events-none');
   modalContainer.classList.remove('translate-y-full');
+  updateBackNavigationVisibility();
 
   // Disparar anuncio de Monetag ÚNICAMENTE durante la navegación (al hacer clic en un juego)
   if (typeof show_11738612 === 'function') {
@@ -317,6 +346,7 @@ function closeModal() {
   const modalContainer = document.getElementById('modalContainer');
   modalContainer.classList.add('translate-y-full');
   downloadModal.classList.add('opacity-0', 'pointer-events-none');
+  updateBackNavigationVisibility();
 }
 
 function startTimer(seconds) {
@@ -390,6 +420,7 @@ function openStepModal() {
   // Mostrar modal
   stepModal.classList.remove('opacity-0', 'pointer-events-none');
   stepModalContainer?.classList.remove('translate-y-full');
+  updateBackNavigationVisibility();
 }
 
 function closeStepModal() {
@@ -398,6 +429,7 @@ function closeStepModal() {
   const stepModalContainer = document.getElementById('stepModalContainer');
   if (stepModalContainer) stepModalContainer.classList.add('translate-y-full');
   if (stepModal) stepModal.classList.add('opacity-0', 'pointer-events-none');
+  updateBackNavigationVisibility();
 }
 
 function setupStepListeners() {
@@ -526,7 +558,83 @@ async function fetchGeoCountryWithTimeout(ms) {
       }
     } catch(e2) {}
   }
-  return null;
+/**
+ * Sistema de Control de Navegación (Atrás, Minimizado/Cierre de Mini App)
+ */
+function updateBackNavigationVisibility() {
+  const headerBackBtn = document.getElementById('headerBackBtn');
+  const stepModal = document.getElementById('stepModal');
+  const downloadModal = document.getElementById('downloadModal');
+  const adminPanelModal = document.getElementById('adminPanelModal');
+
+  const isModalOpen = (stepModal && !stepModal.classList.contains('opacity-0')) ||
+                      (downloadModal && !downloadModal.classList.contains('opacity-0')) ||
+                      (adminPanelModal && !adminPanelModal.classList.contains('opacity-0'));
+
+  const isFiltered = (activeCategory && activeCategory !== 'Todos') || (searchQuery && searchQuery.trim() !== '');
+
+  const showBack = isModalOpen || isFiltered;
+
+  if (headerBackBtn) {
+    if (showBack) {
+      headerBackBtn.classList.remove('hidden');
+      headerBackBtn.classList.add('flex');
+    } else {
+      headerBackBtn.classList.add('hidden');
+      headerBackBtn.classList.remove('flex');
+    }
+  }
+
+  // Integración con el botón de atrás nativo de Telegram WebApp
+  if (window.Telegram?.WebApp?.BackButton) {
+    if (showBack) {
+      window.Telegram.WebApp.BackButton.show();
+    } else {
+      window.Telegram.WebApp.BackButton.hide();
+    }
+  }
+}
+
+function handleBackNavigation() {
+  const stepModal = document.getElementById('stepModal');
+  const downloadModal = document.getElementById('downloadModal');
+  const adminPanelModal = document.getElementById('adminPanelModal');
+
+  if (stepModal && !stepModal.classList.contains('opacity-0')) {
+    closeStepModal();
+    return;
+  }
+  if (downloadModal && !downloadModal.classList.contains('opacity-0')) {
+    closeModal();
+    return;
+  }
+  if (adminPanelModal && !adminPanelModal.classList.contains('opacity-0')) {
+    adminPanelModal.classList.add('opacity-0', 'pointer-events-none');
+    updateBackNavigationVisibility();
+    return;
+  }
+
+  // Si hay filtros o búsqueda activa, volver al catálogo principal "Todos"
+  if ((activeCategory && activeCategory !== 'Todos') || (searchQuery && searchQuery.trim() !== '')) {
+    activeCategory = 'Todos';
+    searchQuery = '';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    renderCategories();
+    renderGames();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  updateBackNavigationVisibility();
+}
+
+function minimizeOrCloseApp() {
+  if (window.Telegram?.WebApp?.close) {
+    window.Telegram.WebApp.close();
+  } else {
+    // Si se prueba fuera de Telegram (navegador estándar)
+    handleBackNavigation();
+  }
 }
 
 function openDownloadLink() {

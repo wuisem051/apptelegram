@@ -63,8 +63,13 @@
   <!-- Sticky Header -->
   <header class="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 py-3">
     <div class="flex items-center justify-between gap-3 mb-3">
-      <div class="flex items-center gap-2">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-green-500 to-emerald-400 flex items-center justify-center text-slate-950 font-extrabold text-xl shadow-lg shadow-green-500/20">
+      <div class="flex items-center gap-2.5">
+        <!-- Botón de Atrás entre secciones/filtros/modales -->
+        <button id="headerBackBtn" class="hidden items-center justify-center w-8.5 h-8.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/70 transition-all active:scale-95 shrink-0 shadow-sm" title="Volver atrás">
+          <i class="fa-solid fa-arrow-left text-sm"></i>
+        </button>
+
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-green-500 to-emerald-400 flex items-center justify-center text-slate-950 font-extrabold text-xl shadow-lg shadow-green-500/20 shrink-0">
           <i class="fa-solid fa-gamepad"></i>
         </div>
         <div>
@@ -80,6 +85,11 @@
           <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
           Online
         </div>
+
+        <!-- Botón de Minimizar / Cerrar la Mini App -->
+        <button id="minimizeAppBtn" title="Minimizar / Cerrar Mini App" class="w-8 h-8 rounded-full bg-slate-800 hover:bg-rose-500/20 hover:text-rose-400 text-slate-300 flex items-center justify-center border border-slate-700/70 transition-all active:scale-95 shrink-0">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
       </div>
     </div>
 
@@ -308,6 +318,11 @@
 
     </div>
   </div>
+
+  <!-- Botón flotante para Volver Arriba / Atrás al hacer scroll -->
+  <button id="floatingBackBtn" title="Volver al Inicio" class="fixed bottom-4 right-4 z-40 hidden px-3.5 py-2.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-slate-200 border border-slate-700/80 shadow-2xl backdrop-blur-md flex items-center gap-2 text-xs font-bold active:scale-95 transition-all">
+    <i class="fa-solid fa-arrow-up text-xs"></i> Volver Arriba
+  </button>
 
   <!-- JavaScript Principal -->
   <script src="app.js"></script>
