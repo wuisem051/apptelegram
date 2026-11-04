@@ -90,6 +90,24 @@
           <span class="flex items-center gap-2.5"><i class="fa-solid fa-gamepad"></i> Catálogo de Juegos</span>
           <i class="fa-solid fa-chevron-right text-xs"></i>
         </button>
+        <button id="menuRequestsBtn" class="w-full text-left px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-between border border-slate-800 transition-colors">
+          <span class="flex items-center gap-2.5">
+            <i class="fa-solid fa-hand-holding-heart text-amber-400"></i> Peticiones de Juegos
+          </span>
+          <span id="requestsBadge" class="hidden text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 px-2 py-0.5 rounded-full font-extrabold">0</span>
+        </button>
+        <button id="menuNotificationsBtn" class="w-full text-left px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-between border border-slate-800 transition-colors">
+          <span class="flex items-center gap-2.5">
+            <i class="fa-solid fa-bell text-blue-400"></i> Avisos Android (Push)
+          </span>
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+        <button id="menuPollBtn" class="w-full text-left px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-between border border-slate-800 transition-colors">
+          <span class="flex items-center gap-2.5">
+            <i class="fa-solid fa-square-poll-vertical text-purple-400"></i> Encuestas de Usuarios
+          </span>
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
         <button id="menuSettingsBtn" class="w-full text-left px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-between border border-slate-800 transition-colors">
           <span class="flex items-center gap-2.5"><i class="fa-solid fa-gear"></i> Personalizar Encabezado</span>
           <i class="fa-solid fa-chevron-right text-xs"></i>
@@ -183,6 +201,21 @@
                 <textarea id="adminDesc" rows="2" required placeholder="Resumen rápido de las características del juego o mod..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-green-500"></textarea>
               </div>
 
+              <!-- Casilla Notificar Usuarios en App Android Nativa -->
+              <div class="bg-slate-950/70 border border-slate-800 rounded-xl p-3 flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                  <i class="fa-solid fa-bell text-blue-400 text-sm"></i>
+                  <div>
+                    <span class="text-xs font-bold text-slate-200 block">Enviar Notificación a usuarios (Solo App Android Nativa)</span>
+                    <span class="text-[11px] text-slate-400">Avisa a los que tengan la APK instalada para que abran y descarguen.</span>
+                  </div>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="adminNotifyUserCheck" checked class="sr-only peer">
+                  <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+              </div>
+
               <div class="flex gap-3 pt-2">
                 <button type="button" id="adminFormReset" class="w-1/3 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl">Limpiar Campos</button>
                 <button type="submit" class="w-2/3 py-3 bg-green-500 hover:bg-green-400 text-slate-950 font-extrabold text-sm rounded-xl shadow-lg shadow-green-500/20 active:scale-95 transition-all">
@@ -263,6 +296,123 @@
                 Guardar Enlaces del Paso de Desbloqueo
               </button>
             </form>
+          </div>
+        </section>
+
+        <!-- VISTA: PETICIONES DE JUEGOS DE USUARIOS -->
+        <section id="viewRequests" class="hidden space-y-6">
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h3 class="font-extrabold text-slate-100 text-base flex items-center gap-2">
+                  <i class="fa-solid fa-hand-holding-heart text-amber-400"></i> Peticiones y Solicitudes de Usuarios
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">Juegos y mods que los usuarios piden desde la app.</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="requestsCountText" class="px-3 py-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 rounded-xl text-xs font-bold">
+                  0 Peticiones
+                </span>
+                <button id="refreshRequestsBtn" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-1.5 transition-colors">
+                  <i class="fa-solid fa-rotate-right"></i> Actualizar
+                </button>
+              </div>
+            </div>
+
+            <div id="requestsListContainer" class="space-y-3">
+              <!-- Cargado dinámicamente -->
+            </div>
+          </div>
+        </section>
+
+        <!-- VISTA: NOTIFICACIONES ANDROID NATIVO -->
+        <section id="viewNotifications" class="hidden space-y-6">
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <h3 class="font-extrabold text-slate-100 text-base mb-1 flex items-center gap-2">
+              <i class="fa-solid fa-bell text-blue-400"></i> Enviar Aviso / Notificación Push Manual
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Esta notificación le llegará solo a los usuarios que tengan instalada la <strong>App Android Nativa (APK)</strong>.</p>
+
+            <form id="sendNotificationForm" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Título del Aviso</label>
+                <input type="text" id="notifTitle" required placeholder="Ej: 🔥 ¡Nuevo juego disponible! / 🔄 Actualización lista" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Mensaje para el Usuario</label>
+                <textarea id="notifMessage" rows="3" required placeholder="Ej: Ya puedes descargar GTA San Andreas con mod de dinero infinito. ¡Toca aquí para obtenerlo!" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-blue-500"></textarea>
+              </div>
+
+              <button type="submit" class="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+                <i class="fa-solid fa-paper-plane"></i> Emitir Notificación a Dispositivos Android
+              </button>
+            </form>
+          </div>
+
+          <!-- Historial de Avisos Emitidos -->
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <h3 class="font-extrabold text-slate-100 text-base mb-4 flex items-center gap-2">
+              <i class="fa-solid fa-clock-rotate-left text-blue-400"></i> Historial de Notificaciones Emitidas
+            </h3>
+            <div id="notificationsHistoryContainer" class="space-y-2 text-sm">
+              <!-- Cargado dinámicamente -->
+            </div>
+          </div>
+        </section>
+
+        <!-- VISTA: GESTIÓN DE ENCUESTAS -->
+        <section id="viewPolls" class="hidden space-y-6">
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <h3 class="font-extrabold text-slate-100 text-base mb-1 flex items-center gap-2">
+              <i class="fa-solid fa-square-poll-vertical text-purple-400"></i> Crear o Administrar Encuesta Activa
+            </h3>
+            <p class="text-xs text-slate-400 mb-4">Lanza una encuesta para saber qué juegos o mejoras quieren los usuarios.</p>
+
+            <form id="pollAdminForm" class="space-y-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Pregunta de la Encuesta</label>
+                <input type="text" id="pollQuestionInput" required placeholder="Ej: ¿Qué tipo de juegos prefieres que agreguemos esta semana?" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-purple-500">
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Opciones de Respuesta (Mínimo 2)</label>
+                <div id="pollOptionsContainer" class="space-y-2">
+                  <input type="text" class="poll-option-field w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500" placeholder="Opción 1: Juegos de Acción y Disparos">
+                  <input type="text" class="poll-option-field w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500" placeholder="Opción 2: Juegos Offline Sin Internet">
+                  <input type="text" class="poll-option-field w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500" placeholder="Opción 3: Juegos de Pago de Play Store">
+                  <input type="text" class="poll-option-field w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-purple-500" placeholder="Opción 4: Emuladores y Retro">
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between p-3 bg-slate-950/70 border border-slate-800 rounded-xl">
+                <span class="text-xs font-bold text-slate-300">Estado de la Encuesta</span>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="pollActiveToggle" checked class="sr-only peer">
+                  <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                </label>
+              </div>
+
+              <button type="submit" class="w-full py-3 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white font-extrabold text-sm rounded-xl shadow-lg shadow-purple-500/20 active:scale-95 transition-all">
+                Guardar y Publicar Encuesta
+              </button>
+            </form>
+          </div>
+
+          <!-- Resultados de la Encuesta Activa -->
+          <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-extrabold text-slate-100 text-base flex items-center gap-2">
+                <i class="fa-solid fa-chart-pie text-purple-400"></i> Resultados en Tiempo Real
+              </h3>
+              <button id="resetPollVotesBtn" class="px-3 py-1 bg-red-500/10 text-red-400 border border-red-500/20 rounded-xl text-xs font-bold hover:bg-red-500/20">
+                Reiniciar Votos
+              </button>
+            </div>
+
+            <div id="pollAdminResultsContainer" class="space-y-3">
+              <!-- Resultados cargados dinámicamente -->
+            </div>
           </div>
         </section>
 

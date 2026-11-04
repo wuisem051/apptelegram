@@ -52,6 +52,11 @@ document.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
   setupAdminListeners();
   setupStepListeners();
+  setupGameRequestListeners();
+  setupNativeNotifications();
+  setupWelcomeModal();
+  setupAboutModal();
+  setupPollSystem();
 
   // Auto-recargar el catálogo cada 15 segundos para sincronizar cambios
   setInterval(() => {
@@ -301,6 +306,424 @@ function setupEventListeners() {
   });
 
   document.getElementById('downloadBtn')?.addEventListener('click', executeMonetagAndDownload);
+}
+
+/**
+ * Sistema de Solicitudes / Peticiones de Juegos por Usuarios
+ */
+function setupGameRequestListeners() {
+  const openBtn = document.getElementById('openRequestModalBtn');
+  const closeBtn = document.getElementById('closeRequestModalBtn');
+  const modal = document.getElementById('requestModal');
+  const form = document.getElementById('gameRequestForm');
+  const successBox = document.getElementById('requestSuccessMsg');
+  const closeSuccessBtn = document.getElementById('closeRequestSuccessBtn');
+
+  const openModal = () => {
+    if (!modal) return;
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    const container = document.getElementById('requestModalContainer');
+    if (container) container.classList.remove('translate-y-full');
+    if (form) form.classList.remove('hidden');
+    if (successBox) successBox.classList.add('hidden');
+  };
+
+  const closeModal = () => {
+    if (!modal) return;
+    const container = document.getElementById('requestModalContainer');
+    if (container) container.classList.add('translate-y-full');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+  };
+
+  openBtn?.addEventListener('click', openModal);
+  closeBtn?.addEventListener('click', closeModal);
+  closeSuccessBtn?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) closeModal();
+  });
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const title = document.getElementById('reqGameTitle')?.value.trim();
+    const modType = document.querySelector('input[name="reqModType"]:checked')?.value || 'con_mod';
+    const isPaid = document.querySelector('input[name="reqIsPaid"]:checked')?.value || 'no';
+    const notes = document.getElementById('reqNotes')?.value.trim() || '';
+    const userName = document.getElementById('reqUserName')?.value.trim() || '';
+
+    if (!title) {
+      alert("Por favor escribe el nombre del juego.");
+      return;
+    }
+
+    const submitBtn = document.getElementById('submitRequestBtn');
+    if (submitBtn) {
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner animate-spin"></i> Enviando...';
+    }
+
+    try {
+      if (db) {
+        await db.collection("game_requests").add({
+          gameTitle: title,
+          modType: modType,
+          isPaid: isPaid,
+          notes: notes,
+          userName: userName,
+          status: 'pending',
+          createdAt: new Date().toISOString(),
+          timestamp: Date.now()
+        });
+      } else {
+        console.warn("Firestore no conectado para guardar petición.");
+      }
+
+      form.reset();
+      form.classList.add('hidden');
+      if (successBox) successBox.classList.remove('hidden');
+    } catch (err) {
+      alert("Error al enviar la petición: " + err.message);
+    } finally {
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Enviar Petición';
+      }
+    }
+  });
+}
+
+/**
+ * Notificaciones Exclusivas para App Android Nativa (Capacitor)
+ * Si está en Telegram Mini App o Web estándar, este módulo NO se ejecuta.
+ */
+function isNativeAndroidApp() {
+  return window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform();
+}
+
+async function setupNativeNotifications() {
+  // Comprobación estricta: SOLO ejecutar en Android Nativo
+  if (!isNativeAndroidApp()) {
+    console.log("ℹ️ Ejecutando en Telegram Mini App / Navegador Web: Notificaciones nativas desactivadas.");
+    return;
+  }
+
+  console.log("📱 Detectada App Android Nativa: Configurando Notificaciones...");
+
+  const LocalNotifications = window.Capacitor.Plugins?.LocalNotifications;
+  if (!LocalNotifications) {
+    console.warn("Plugin LocalNotifications no disponible en Capacitor.");
+    return;
+  }
+
+  try {
+    // Pedir permiso si no ha sido otorgado
+    const permStatus = await LocalNotifications.checkPermissions();
+    if (permStatus.display !== 'granted') {
+      const requestRes = await LocalNotifications.requestPermissions();
+      if (requestRes.display !== 'granted') {
+        console.log("Permiso de notificaciones denegado por el usuario.");
+        return;
+      }
+    }
+
+    // Crear canal de notificación para Android 8.0+
+    try {
+      await LocalNotifications.createChannel({
+        id: 'apkstore_updates',
+        name: 'Actualizaciones y Nuevos Juegos',
+        description: 'Avisos de nuevos juegos y actualizaciones disponibles',
+        importance: 4,
+        visibility: 1,
+        vibration: true,
+        sound: 'res://raw/notification.wav'
+      });
+    } catch(e) {}
+
+    // Escuchar la colección 'notifications' de Firebase Firestore
+    if (!db) return;
+
+    // Obtener la última notificación vista guardada en localStorage
+    let lastNotifTimestamp = parseInt(localStorage.getItem('last_seen_notif_time') || '0', 10);
+
+    // Si es la primera vez que abre la app, inicializamos con la hora actual para no lanzar historial viejo
+    if (lastNotifTimestamp === 0) {
+      lastNotifTimestamp = Date.now();
+      localStorage.setItem('last_seen_notif_time', lastNotifTimestamp.toString());
+    }
+
+    db.collection("notifications")
+      .where("timestamp", ">", lastNotifTimestamp)
+      .onSnapshot(snapshot => {
+        snapshot.docChanges().forEach(async change => {
+          if (change.type === "added") {
+            const notif = change.doc.data();
+            const notifTime = notif.timestamp || Date.now();
+
+            if (notifTime > lastNotifTimestamp) {
+              lastNotifTimestamp = notifTime;
+              localStorage.setItem('last_seen_notif_time', lastNotifTimestamp.toString());
+
+              // Disparar Notificación Local Nativa en la barra de Android
+              try {
+                await LocalNotifications.schedule({
+                  notifications: [
+                    {
+                      id: Math.floor(Math.random() * 100000),
+                      title: notif.title || '🎮 APK Store - Novedad',
+                      body: notif.message || 'Hay una nueva actualización disponible.',
+                      channelId: 'apkstore_updates',
+                      smallIcon: 'ic_launcher',
+                      extra: {
+                        gameId: notif.gameId || null
+                      }
+                    }
+                  ]
+                });
+              } catch (err) {
+                console.warn("Error disparando notificación nativa:", err);
+              }
+            }
+          }
+        });
+      }, err => console.warn("Error escuchando notificaciones en Android:", err));
+
+    // Acción al tocar la notificación
+    LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
+      const extra = notification.notification?.extra;
+      if (extra && extra.gameId) {
+        openDownloadModal(extra.gameId);
+      }
+    });
+
+  } catch (err) {
+    console.warn("Error inicializando notificaciones nativas:", err);
+  }
+}
+
+/**
+ * 9. Bienvenida para Primera Instalación en Android Nativo
+ */
+function setupWelcomeModal() {
+  const modal = document.getElementById('welcomeModal');
+  const confirmBtn = document.getElementById('welcomeConfirmBtn');
+  if (!modal) return;
+
+  // Solo mostrar en Android nativo y solo si no ha sido vista previamente
+  const hasSeenWelcome = localStorage.getItem('has_seen_welcome_v2');
+  if (isNativeAndroidApp() && !hasSeenWelcome) {
+    setTimeout(() => {
+      modal.classList.remove('opacity-0', 'pointer-events-none');
+      const container = document.getElementById('welcomeModalContainer');
+      if (container) container.classList.remove('scale-95');
+    }, 600);
+  }
+
+  confirmBtn?.addEventListener('click', () => {
+    localStorage.setItem('has_seen_welcome_v2', 'true');
+    const container = document.getElementById('welcomeModalContainer');
+    if (container) container.classList.add('scale-95');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+  });
+}
+
+/**
+ * 10. Modal "Acerca de esta Versión"
+ */
+function setupAboutModal() {
+  const openBtn = document.getElementById('openAboutModalBtn');
+  const closeBtn = document.getElementById('closeAboutModalBtn');
+  const modal = document.getElementById('aboutModal');
+
+  const open = () => {
+    if (!modal) return;
+    const platformLabel = document.getElementById('aboutPlatformLabel');
+    if (platformLabel) {
+      platformLabel.textContent = isNativeAndroidApp() ? 'Android Nativo (APK Instalada)' : 'Telegram WebApp / Navegador';
+    }
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    const container = document.getElementById('aboutModalContainer');
+    if (container) container.classList.remove('translate-y-full');
+  };
+
+  const close = () => {
+    if (!modal) return;
+    const container = document.getElementById('aboutModalContainer');
+    if (container) container.classList.add('translate-y-full');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+  };
+
+  openBtn?.addEventListener('click', open);
+  closeBtn?.addEventListener('click', close);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) close();
+  });
+}
+
+/**
+ * 11. Sistema de Encuestas Interactivas (Administradas desde Firestore)
+ */
+let currentActivePoll = null;
+
+function setupPollSystem() {
+  const openBtn = document.getElementById('openPollModalBtn');
+  const closeBtn = document.getElementById('closePollModalBtn');
+  const modal = document.getElementById('pollModal');
+
+  const open = () => {
+    if (!modal) return;
+    renderUserPollView();
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    const container = document.getElementById('pollModalContainer');
+    if (container) container.classList.remove('translate-y-full');
+  };
+
+  const close = () => {
+    if (!modal) return;
+    const container = document.getElementById('pollModalContainer');
+    if (container) container.classList.add('translate-y-full');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+  };
+
+  openBtn?.addEventListener('click', open);
+  closeBtn?.addEventListener('click', close);
+  modal?.addEventListener('click', (e) => {
+    if (e.target === modal) close();
+  });
+
+  // Escuchar la encuesta activa en Firebase Firestore
+  if (!db) return;
+  try {
+    db.collection("settings").doc("active_poll").onSnapshot(doc => {
+      if (doc.exists) {
+        currentActivePoll = doc.data();
+        const indicator = document.getElementById('pollIndicatorDot');
+        const hasVoted = localStorage.getItem(`voted_poll_${currentActivePoll.id || 'default'}`);
+        if (indicator) {
+          if (currentActivePoll.active && !hasVoted) {
+            indicator.classList.remove('hidden');
+          } else {
+            indicator.classList.add('hidden');
+          }
+        }
+        if (modal && !modal.classList.contains('opacity-0')) {
+          renderUserPollView();
+        }
+      } else {
+        currentActivePoll = null;
+      }
+    }, err => console.warn("Error leyendo encuesta:", err));
+  } catch(e) {}
+}
+
+function renderUserPollView() {
+  const area = document.getElementById('pollContentArea');
+  if (!area) return;
+
+  if (!currentActivePoll || !currentActivePoll.active) {
+    area.innerHTML = `
+      <div class="text-center py-8">
+        <i class="fa-solid fa-square-poll-vertical text-4xl text-slate-600 mb-3"></i>
+        <p class="text-slate-400 font-medium text-xs">No hay ninguna encuesta activa en este momento.</p>
+        <p class="text-slate-500 text-[11px] mt-1">Vuelve pronto para votar en la próxima encuesta.</p>
+      </div>
+    `;
+    return;
+  }
+
+  const pollId = currentActivePoll.id || 'default';
+  const hasVoted = localStorage.getItem(`voted_poll_${pollId}`);
+  const options = currentActivePoll.options || [];
+  const votes = currentActivePoll.votes || {};
+
+  // Total de votos
+  let totalVotes = 0;
+  options.forEach((opt, idx) => {
+    totalVotes += (votes[idx] || 0);
+  });
+
+  if (hasVoted) {
+    // Mostrar resultados
+    area.innerHTML = `
+      <div>
+        <span class="text-[10px] font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-0.5 rounded-full inline-block mb-2">
+          ✓ Ya has votado
+        </span>
+        <h4 class="font-bold text-sm text-slate-100 mb-3">${escapeHtmlApp(currentActivePoll.question)}</h4>
+        
+        <div class="space-y-2.5">
+          ${options.map((opt, idx) => {
+            const count = votes[idx] || 0;
+            const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+            const isUserChoice = hasVoted === String(idx);
+
+            return `
+              <div class="bg-slate-950 p-3 rounded-xl border ${isUserChoice ? 'border-purple-500/60 bg-purple-500/5' : 'border-slate-800'}">
+                <div class="flex justify-between items-center text-xs mb-1.5">
+                  <span class="font-semibold text-slate-200 ${isUserChoice ? 'text-purple-300' : ''}">
+                    ${isUserChoice ? '👉 ' : ''}${escapeHtmlApp(opt)}
+                  </span>
+                  <span class="font-extrabold text-slate-300">${pct}% <span class="text-[10px] text-slate-500 font-normal">(${count})</span></span>
+                </div>
+                <div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div class="bg-gradient-to-r from-purple-500 to-indigo-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+
+        <p class="text-[11px] text-slate-500 text-center mt-3">Total de votos registrados: <strong>${totalVotes}</strong></p>
+      </div>
+    `;
+  } else {
+    // Formulario de votación
+    area.innerHTML = `
+      <div>
+        <h4 class="font-bold text-sm text-slate-100 mb-3">${escapeHtmlApp(currentActivePoll.question)}</h4>
+        
+        <div class="space-y-2">
+          ${options.map((opt, idx) => `
+            <button onclick="submitUserVote(${idx})" class="w-full text-left p-3 rounded-xl bg-slate-950 hover:bg-slate-800 border border-slate-800 hover:border-purple-500/50 text-slate-200 text-xs font-semibold flex items-center justify-between transition-all active:scale-95 group">
+              <span>${escapeHtmlApp(opt)}</span>
+              <i class="fa-solid fa-check text-purple-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+            </button>
+          `).join('')}
+        </div>
+
+        <p class="text-[11px] text-slate-500 text-center mt-4">Toca una opción para emitir tu voto.</p>
+      </div>
+    `;
+  }
+}
+
+window.submitUserVote = async function(optionIndex) {
+  if (!db || !currentActivePoll) return;
+  const pollId = currentActivePoll.id || 'default';
+
+  try {
+    const docRef = db.collection("settings").doc("active_poll");
+    await db.runTransaction(async (transaction) => {
+      const sfDoc = await transaction.get(docRef);
+      if (!sfDoc.exists) return;
+      const data = sfDoc.data();
+      const currentVotes = data.votes || {};
+      currentVotes[optionIndex] = (currentVotes[optionIndex] || 0) + 1;
+      transaction.update(docRef, { votes: currentVotes });
+    });
+
+    localStorage.setItem(`voted_poll_${pollId}`, String(optionIndex));
+    const indicator = document.getElementById('pollIndicatorDot');
+    if (indicator) indicator.classList.add('hidden');
+    renderUserPollView();
+  } catch (e) {
+    alert("Error al registrar voto: " + e.message);
+  }
+};
+
+function escapeHtmlApp(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+  });
 }
 
 /**

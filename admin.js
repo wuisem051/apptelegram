@@ -4,6 +4,8 @@
 
 let db = null;
 let gamesList = [];
+let requestsList = [];
+let notificationsList = [];
 const ADMIN_PASSWORD = "admin";
 
 // Configuración de Firebase
@@ -76,22 +78,33 @@ function setupLogin() {
  */
 function setupNavigation() {
   const menuCatBtn = document.getElementById('menuCatBtn');
+  const menuRequestsBtn = document.getElementById('menuRequestsBtn');
+  const menuNotificationsBtn = document.getElementById('menuNotificationsBtn');
+  const menuPollBtn = document.getElementById('menuPollBtn');
   const menuSettingsBtn = document.getElementById('menuSettingsBtn');
   const menuAnalyticsBtn = document.getElementById('menuAnalyticsBtn');
 
   const viewCatalog = document.getElementById('viewCatalog');
+  const viewRequests = document.getElementById('viewRequests');
+  const viewNotifications = document.getElementById('viewNotifications');
+  const viewPolls = document.getElementById('viewPolls');
   const viewSettings = document.getElementById('viewSettings');
   const viewAnalytics = document.getElementById('viewAnalytics');
 
   const navItems = [
     { btn: menuCatBtn, view: viewCatalog },
+    { btn: menuRequestsBtn, view: viewRequests },
+    { btn: menuNotificationsBtn, view: viewNotifications },
+    { btn: menuPollBtn, view: viewPolls },
     { btn: menuSettingsBtn, view: viewSettings },
     { btn: menuAnalyticsBtn, view: viewAnalytics }
   ];
 
   navItems.forEach(item => {
+    if (!item.btn) return;
     item.btn.addEventListener('click', () => {
       navItems.forEach(i => {
+        if (!i.btn || !i.view) return;
         i.btn.className = "w-full text-left px-4 py-3 rounded-2xl bg-slate-900 hover:bg-slate-800 text-slate-300 font-bold text-sm flex items-center justify-between border border-slate-800 transition-colors";
         i.view.classList.add('hidden');
       });
@@ -101,6 +114,9 @@ function setupNavigation() {
 
       if (item.btn === menuAnalyticsBtn) loadAnalytics();
       if (item.btn === menuSettingsBtn) loadHeaderSettings();
+      if (item.btn === menuRequestsBtn) loadUserRequests();
+      if (item.btn === menuNotificationsBtn) loadNotificationsHistory();
+      if (item.btn === menuPollBtn) loadAdminPollData();
     });
   });
 }
@@ -131,6 +147,12 @@ function initAdminData() {
   } catch(e) {
     db.collection("downloads").get().then(snap => loadAnalyticsFromSnapshot(snap));
   }
+
+  // Escuchar solicitudes de usuarios en tiempo real
+  listenToUserRequests();
+
+  // Escuchar notificaciones en tiempo real
+  listenToNotifications();
 
   loadHeaderSettings();
 }
@@ -185,6 +207,30 @@ function setupForms() {
       await fetchPlayStoreData(query);
     });
   }
+
+  // Formulario de emisión de notificaciones Push para Android Nativo
+  const sendNotificationForm = document.getElementById('sendNotificationForm');
+  sendNotificationForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await sendManualNotification();
+  });
+
+  const refreshRequestsBtn = document.getElementById('refreshRequestsBtn');
+  refreshRequestsBtn?.addEventListener('click', () => {
+    loadUserRequests();
+  });
+
+  // Formulario de Encuesta
+  const pollAdminForm = document.getElementById('pollAdminForm');
+  pollAdminForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await saveAdminPoll();
+  });
+
+  const resetPollVotesBtn = document.getElementById('resetPollVotesBtn');
+  resetPollVotesBtn?.addEventListener('click', async () => {
+    await resetAdminPollVotes();
+  });
 }
 
 /**
@@ -432,12 +478,30 @@ async function saveGame() {
   }
 
   try {
+    const notifyUsers = document.getElementById('adminNotifyUserCheck')?.checked ?? true;
+
     if (docId) {
       await db.collection("games").doc(docId).update(gameData);
-      alert("¡Juego actualizado en la Mini App de Telegram!");
+      
+      if (notifyUsers) {
+        await createNotificationRecord(
+          `🔄 ¡Actualización disponible!`,
+          `${gameData.title} se ha actualizado a la versión ${gameData.version}. ¡Toca para descargarla!`,
+          gameData
+        );
+      }
+      alert("¡Juego actualizado en el catálogo y aviso enviado a Android!");
     } else {
       await db.collection("games").add(gameData);
-      alert("¡Juego publicado con éxito en Telegram!");
+
+      if (notifyUsers) {
+        await createNotificationRecord(
+          `🔥 ¡Nuevo juego disponible!`,
+          `Se ha agregado ${gameData.title} al catálogo. ¡Entra y descárgalo ahora!`,
+          gameData
+        );
+      }
+      alert("¡Juego publicado con éxito en el catálogo y aviso enviado a Android!");
     }
     resetAdminGameForm();
   } catch (err) {
@@ -661,4 +725,459 @@ function loadAnalyticsFromSnapshot(snapshot) {
       </span>
     </div>
   `).join('');
+}
+
+/**
+ * 7. Gestión de Peticiones de Juegos de Usuarios
+ */
+function listenToUserRequests() {
+  if (!db) return;
+  try {
+    db.collection("game_requests").onSnapshot(snapshot => {
+      requestsList = [];
+      snapshot.forEach(doc => {
+        requestsList.push({ docId: doc.id, ...doc.data() });
+      });
+      // Ordenar por fecha descendente
+      requestsList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+      renderUserRequests();
+      updateRequestsBadge();
+    }, err => console.warn("Error al escuchar solicitudes:", err));
+  } catch (e) {
+    console.warn("Snapshot solicitudes falló:", e);
+  }
+}
+
+async function loadUserRequests() {
+  if (!db) return;
+  try {
+    const snapshot = await db.collection("game_requests").get();
+    requestsList = [];
+    snapshot.forEach(doc => {
+      requestsList.push({ docId: doc.id, ...doc.data() });
+    });
+    requestsList.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    renderUserRequests();
+    updateRequestsBadge();
+  } catch (err) {
+    console.error("Error al cargar pedidos:", err);
+  }
+}
+
+function updateRequestsBadge() {
+  const badge = document.getElementById('requestsBadge');
+  const countText = document.getElementById('requestsCountText');
+  const pendingCount = requestsList.filter(r => r.status !== 'completed').length;
+
+  if (badge) {
+    if (pendingCount > 0) {
+      badge.textContent = `${pendingCount} nuevo${pendingCount > 1 ? 's' : ''}`;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  }
+
+  if (countText) {
+    countText.textContent = `${requestsList.length} Petición${requestsList.length !== 1 ? 'es' : ''} (${pendingCount} pendientes)`;
+  }
+}
+
+function renderUserRequests() {
+  const container = document.getElementById('requestsListContainer');
+  if (!container) return;
+
+  if (requestsList.length === 0) {
+    container.innerHTML = '<p class="text-sm text-slate-500 py-6 text-center">Aún no hay peticiones de juegos enviadas por usuarios.</p>';
+    return;
+  }
+
+  container.innerHTML = requestsList.map(req => {
+    const isCompleted = req.status === 'completed';
+    const isPaid = req.isPaid === 'si';
+    const isMod = req.modType === 'con_mod';
+    const timeFormatted = req.createdAt ? new Date(req.createdAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente';
+
+    return `
+      <div class="bg-slate-950 p-4 rounded-2xl border ${isCompleted ? 'border-slate-800/60 opacity-60' : 'border-slate-800 hover:border-slate-700'} transition-all space-y-3">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <h4 class="font-extrabold text-base text-slate-100">${req.gameTitle}</h4>
+            
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isMod ? 'bg-amber-500/10 text-amber-400 border border-amber-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30'}">
+              ${isMod ? '⚡ Con Mod' : '🟢 Sin Mod (Original)'}
+            </span>
+
+            <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold ${isPaid ? 'bg-purple-500/10 text-purple-400 border border-purple-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+              ${isPaid ? '💎 De Paga en Play Store' : '🆓 Gratis'}
+            </span>
+
+            ${isCompleted ? '<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-green-500/20 text-green-300 border border-green-500/40">✅ Atendido</span>' : '<span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">⏳ Pendiente</span>'}
+          </div>
+
+          <span class="text-xs text-slate-500 whitespace-nowrap">
+            <i class="fa-regular fa-clock mr-1"></i>${timeFormatted}
+          </span>
+        </div>
+
+        ${req.notes ? `
+          <div class="bg-slate-900/80 rounded-xl p-2.5 border border-slate-800/80 text-xs text-slate-300">
+            <span class="text-slate-500 font-bold uppercase tracking-wider text-[10px] block mb-0.5">Detalles del usuario:</span>
+            ${escapeHtml(req.notes)}
+          </div>
+        ` : ''}
+
+        <div class="flex items-center justify-between gap-3 pt-1 text-xs">
+          <div class="text-slate-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-user text-slate-500"></i>
+            <span>Pedido por: <strong class="text-slate-300">${req.userName ? escapeHtml(req.userName) : 'Anónimo'}</strong></span>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <!-- Botón para copiar al formulario y publicar -->
+            <button onclick="fillFormFromRequest('${escapeJs(req.gameTitle)}', '${req.docId}')" class="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/20 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors" title="Cargar nombre en el publicador">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i> Publicar en Catálogo
+            </button>
+
+            ${!isCompleted ? `
+              <button onclick="markRequestCompleted('${req.docId}')" class="px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors">
+                <i class="fa-solid fa-check"></i> Atendido
+              </button>
+            ` : ''}
+
+            <button onclick="deleteRequestAdmin('${req.docId}')" class="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors" title="Eliminar petición">
+              <i class="fa-solid fa-trash text-xs"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+window.fillFormFromRequest = function(gameTitle, reqDocId) {
+  // Cambiar a la pestaña de catálogo
+  const menuCatBtn = document.getElementById('menuCatBtn');
+  menuCatBtn?.click();
+
+  // Rellenar buscador automático y nombre
+  const autoFetchQuery = document.getElementById('autoFetchQuery');
+  const adminTitle = document.getElementById('adminTitle');
+  if (autoFetchQuery) autoFetchQuery.value = gameTitle;
+  if (adminTitle) adminTitle.value = gameTitle;
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  // Si existe el botón de autocompletar, consultar automáticamente
+  const autoFetchBtn = document.getElementById('autoFetchBtn');
+  if (autoFetchBtn) {
+    autoFetchBtn.click();
+  }
+};
+
+window.markRequestCompleted = async function(docId) {
+  if (!db) return;
+  try {
+    await db.collection("game_requests").doc(docId).update({
+      status: 'completed',
+      completedAt: new Date().toISOString()
+    });
+  } catch (e) {
+    alert("Error al actualizar estado: " + e.message);
+  }
+};
+
+window.deleteRequestAdmin = async function(docId) {
+  if (!confirm("¿Eliminar esta solicitud permanentemente?")) return;
+  if (!db) return;
+  try {
+    await db.collection("game_requests").doc(docId).delete();
+  } catch (e) {
+    alert("Error al eliminar solicitud: " + e.message);
+  }
+};
+
+/**
+ * 8. Notificaciones para App Android Nativa
+ */
+async function createNotificationRecord(title, message, gameRef = null) {
+  if (!db) return;
+  try {
+    const notifData = {
+      title: title,
+      message: message,
+      gameId: gameRef ? (gameRef.id || null) : null,
+      gameTitle: gameRef ? (gameRef.title || '') : '',
+      gameIcon: gameRef ? (gameRef.icon || '') : '',
+      timestamp: Date.now(),
+      createdAt: new Date().toISOString()
+    };
+    await db.collection("notifications").add(notifData);
+  } catch (e) {
+    console.warn("Error al registrar notificación en Firestore:", e);
+  }
+}
+
+async function sendManualNotification() {
+  const title = document.getElementById('notifTitle')?.value.trim();
+  const message = document.getElementById('notifMessage')?.value.trim();
+
+  if (!title || !message) {
+    alert("Por favor completa el título y el mensaje.");
+    return;
+  }
+
+  if (!db) {
+    alert("Firebase no está conectado.");
+    return;
+  }
+
+  try {
+    await createNotificationRecord(title, message);
+    alert("¡Aviso enviado exitosamente! Los usuarios con la app Android nativa recibirán la notificación.");
+    document.getElementById('notifTitle').value = '';
+    document.getElementById('notifMessage').value = '';
+    loadNotificationsHistory();
+  } catch (e) {
+    alert("Error al emitir notificación: " + e.message);
+  }
+}
+
+function listenToNotifications() {
+  if (!db) return;
+  try {
+    db.collection("notifications").onSnapshot(snapshot => {
+      notificationsList = [];
+      snapshot.forEach(doc => {
+        notificationsList.push({ docId: doc.id, ...doc.data() });
+      });
+      notificationsList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+      renderNotificationsHistory();
+    }, err => console.warn("Error escuchando notificaciones:", err));
+  } catch(e) {}
+}
+
+async function loadNotificationsHistory() {
+  if (!db) return;
+  try {
+    const snapshot = await db.collection("notifications").get();
+    notificationsList = [];
+    snapshot.forEach(doc => {
+      notificationsList.push({ docId: doc.id, ...doc.data() });
+    });
+    notificationsList.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    renderNotificationsHistory();
+  } catch (err) {
+    console.error("Error al cargar historial de notificaciones:", err);
+  }
+}
+
+function renderNotificationsHistory() {
+  const container = document.getElementById('notificationsHistoryContainer');
+  if (!container) return;
+
+  if (notificationsList.length === 0) {
+    container.innerHTML = '<p class="text-sm text-slate-500 py-4 text-center">Aún no se han emitido avisos para Android.</p>';
+    return;
+  }
+
+  const recent = notificationsList.slice(0, 30);
+  container.innerHTML = recent.map(notif => {
+    const dateFormatted = notif.createdAt ? new Date(notif.createdAt).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : 'Reciente';
+    return `
+      <div class="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex items-start justify-between gap-3">
+        <div class="flex items-start gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <i class="fa-solid fa-bell"></i>
+          </div>
+          <div class="min-w-0">
+            <h4 class="font-bold text-sm text-slate-100">${escapeHtml(notif.title)}</h4>
+            <p class="text-xs text-slate-300 mt-0.5 leading-relaxed">${escapeHtml(notif.message)}</p>
+            <span class="text-[10px] text-slate-500 mt-1 block">
+              <i class="fa-regular fa-clock mr-1"></i>${dateFormatted} ${notif.gameTitle ? `• Ref: ${escapeHtml(notif.gameTitle)}` : ''}
+            </span>
+          </div>
+        </div>
+
+        <button onclick="deleteNotificationAdmin('${notif.docId}')" class="text-slate-500 hover:text-red-400 p-1.5 transition-colors flex-shrink-0" title="Eliminar aviso">
+          <i class="fa-solid fa-trash text-xs"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+window.deleteNotificationAdmin = async function(docId) {
+  if (!confirm("¿Deseas eliminar este registro de aviso?")) return;
+  if (!db) return;
+  try {
+    await db.collection("notifications").doc(docId).delete();
+  } catch(e) {
+    alert("Error al borrar: " + e.message);
+  }
+};
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, function(m) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[m];
+  });
+}
+
+function escapeJs(str) {
+  if (!str) return '';
+  return String(str).replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+/**
+ * 9. Gestión y Administración de Encuestas
+ */
+let currentAdminPoll = null;
+
+async function loadAdminPollData() {
+  if (!db) return;
+  try {
+    const doc = await db.collection("settings").doc("active_poll").get();
+    if (doc.exists) {
+      currentAdminPoll = doc.data();
+      populateAdminPollForm(currentAdminPoll);
+      renderAdminPollResults(currentAdminPoll);
+    } else {
+      currentAdminPoll = null;
+      renderAdminPollResults(null);
+    }
+  } catch (err) {
+    console.warn("Error cargando encuesta en admin:", err);
+  }
+}
+
+function populateAdminPollForm(poll) {
+  if (!poll) return;
+  const questionInput = document.getElementById('pollQuestionInput');
+  const activeToggle = document.getElementById('pollActiveToggle');
+  const optionFields = document.querySelectorAll('.poll-option-field');
+
+  if (questionInput) questionInput.value = poll.question || '';
+  if (activeToggle) activeToggle.checked = poll.active !== false;
+
+  const options = poll.options || [];
+  optionFields.forEach((field, idx) => {
+    field.value = options[idx] || '';
+  });
+}
+
+function renderAdminPollResults(poll) {
+  const container = document.getElementById('pollAdminResultsContainer');
+  if (!container) return;
+
+  if (!poll || !poll.question) {
+    container.innerHTML = '<p class="text-sm text-slate-500 py-4 text-center">No hay ninguna encuesta configurada.</p>';
+    return;
+  }
+
+  const options = poll.options || [];
+  const votes = poll.votes || {};
+  let totalVotes = 0;
+  options.forEach((opt, idx) => {
+    totalVotes += (votes[idx] || 0);
+  });
+
+  container.innerHTML = `
+    <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3">
+      <div class="flex items-center justify-between">
+        <h4 class="font-extrabold text-sm text-slate-100">${escapeHtml(poll.question)}</h4>
+        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold ${poll.active ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}">
+          ${poll.active ? '● Activa' : '○ Inactiva'}
+        </span>
+      </div>
+
+      <div class="space-y-2.5 pt-1">
+        ${options.map((opt, idx) => {
+          const count = votes[idx] || 0;
+          const pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+          return `
+            <div class="space-y-1">
+              <div class="flex justify-between text-xs">
+                <span class="text-slate-300 font-medium">${escapeHtml(opt)}</span>
+                <span class="text-slate-400 font-bold">${count} votos (${pct}%)</span>
+              </div>
+              <div class="w-full bg-slate-900 h-2.5 rounded-full overflow-hidden border border-slate-800">
+                <div class="bg-purple-500 h-full rounded-full transition-all duration-500" style="width: ${pct}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="pt-2 border-t border-slate-900 flex justify-between text-xs text-slate-500">
+        <span>Votos totales: <strong>${totalVotes}</strong></span>
+        <span>ID: ${poll.id || 'N/A'}</span>
+      </div>
+    </div>
+  `;
+}
+
+async function saveAdminPoll() {
+  const question = document.getElementById('pollQuestionInput')?.value.trim();
+  const active = document.getElementById('pollActiveToggle')?.checked ?? true;
+  const optionFields = document.querySelectorAll('.poll-option-field');
+  
+  const options = [];
+  optionFields.forEach(f => {
+    const val = f.value.trim();
+    if (val) options.push(val);
+  });
+
+  if (!question || options.length < 2) {
+    alert("Por favor escribe la pregunta y al menos 2 opciones de respuesta.");
+    return;
+  }
+
+  if (!db) {
+    alert("Firebase no está conectado.");
+    return;
+  }
+
+  try {
+    // Si la pregunta cambió significativamente respecto a la anterior, generamos nuevo ID para permitir nuevos votos
+    const isNew = !currentAdminPoll || currentAdminPoll.question !== question;
+    const pollId = isNew ? 'poll_' + Date.now() : (currentAdminPoll.id || 'poll_' + Date.now());
+    const existingVotes = isNew ? {} : (currentAdminPoll.votes || {});
+
+    const pollData = {
+      id: pollId,
+      question: question,
+      options: options,
+      active: active,
+      votes: existingVotes,
+      updatedAt: new Date().toISOString()
+    };
+
+    await db.collection("settings").doc("active_poll").set(pollData);
+    currentAdminPoll = pollData;
+    renderAdminPollResults(pollData);
+    alert("¡Encuesta guardada y sincronizada en tiempo real con la app!");
+  } catch (err) {
+    alert("Error al guardar encuesta: " + err.message);
+  }
+}
+
+async function resetAdminPollVotes() {
+  if (!confirm("¿Deseas reiniciar los votos de la encuesta a cero?")) return;
+  if (!db || !currentAdminPoll) return;
+
+  try {
+    const newId = 'poll_' + Date.now();
+    await db.collection("settings").doc("active_poll").update({
+      id: newId,
+      votes: {},
+      resetAt: new Date().toISOString()
+    });
+    currentAdminPoll.id = newId;
+    currentAdminPoll.votes = {};
+    renderAdminPollResults(currentAdminPoll);
+    alert("¡Votos reiniciados con éxito!");
+  } catch (e) {
+    alert("Error al reiniciar votos: " + e.message);
+  }
 }
