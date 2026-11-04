@@ -1,6 +1,16 @@
-# 🚀 Telegram Mini App (TMA) - APK Store & Monetización con Monetag
+# 🚀 Telegram Mini App (TMA) & App Android Nativa - APK Store & Monetización
 
-Arquitectura y código completo para una **Telegram Mini App** de catálogo y descarga de archivos APK para Android, diseñada con una interfaz moderna estilo **Google Play / App Store en Modo Oscuro** y optimizada para monetizar con **Monetag** (Interstitial, Rewarded o SmartLink direct).
+Arquitectura y código completo para una **Telegram Mini App y Aplicación Android Nativa (Capacitor)** de catálogo y descarga de archivos APK para Android, diseñada con una interfaz moderna estilo **Google Play / App Store en Modo Oscuro** y optimizada para monetizar con **Monetag** y base de datos en la nube con **Firebase Firestore**.
+
+---
+
+## 🆕 Novedades v1.2.0 (Build 2)
+
+- 📥 **Módulo de Petición de Juegos:** Los usuarios pueden pedir cualquier APK con o sin MOD, indicando si es de pago en Play Store.
+- 🔔 **Notificaciones Push Nativas para Android:** Integración con `@capacitor/local-notifications` y permiso `POST_NOTIFICATIONS` para alertar en la barra de tareas cuando hay nuevos juegos o updates.
+- 📊 **Sistema de Encuestas Interactivas:** Encuestas configurables en tiempo real desde el Panel Admin con cálculo de votos y porcentajes automáticos.
+- 🚀 **Bienvenida Inicial:** Modal de bienvenida animado que se muestra únicamente en la primera apertura en Android.
+- ℹ️ **Modal Acerca de:** Información técnica del entorno (Nativo vs TMA/Web) y versión de compilación.
 
 ---
 
