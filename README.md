@@ -11,6 +11,9 @@ Arquitectura y código completo para una **Telegram Mini App y Aplicación Andro
 - 📊 **Sistema de Encuestas Interactivas:** Encuestas configurables en tiempo real desde el Panel Admin con cálculo de votos y porcentajes automáticos.
 - 🚀 **Bienvenida Inicial:** Modal de bienvenida animado que se muestra únicamente en la primera apertura en Android.
 - ℹ️ **Modal Acerca de:** Información técnica del entorno (Nativo vs TMA/Web) y versión de compilación.
+- 📢 **Aviso Previo de Publicidad:** Modal "Verás una publicidad para continuar" antes de iniciar la descarga.
+- 🎯 **In-App Interstitial Monetag:** Reemplazo de anuncio por interstitial In-App configurado con frecuencia, capping e intervalos.
+- 📱 **Soporte Android 10 y 32 bits:** Compatibilidad universal para arquitecturas de 32 bits (armeabi-v7a) y 64 bits (arm64-v8a) desde Android 7.0 hasta Android 14/15/16.
 
 ---
 
