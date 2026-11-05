@@ -256,7 +256,7 @@ function renderGames() {
         </div>
       </div>
       <button 
-        onclick="openDownloadModal(${game.id})"
+        onclick="requestDownloadModal(${game.id})"
         class="flex-shrink-0 px-3.5 py-2 bg-slate-800 hover:bg-green-500 text-green-400 hover:text-slate-950 font-extrabold text-xs rounded-xl border border-slate-700 hover:border-green-500 transition-all flex items-center gap-1.5 shadow-sm">
         <i class="fa-solid fa-download"></i> APK
       </button>
@@ -306,6 +306,14 @@ function setupEventListeners() {
   });
 
   document.getElementById('downloadBtn')?.addEventListener('click', executeMonetagAndDownload);
+
+  // Botones de aviso "Verás una publicidad para continuar"
+  document.getElementById('cancelAdNoticeBtn')?.addEventListener('click', closeAdNoticeModal);
+  document.getElementById('confirmAdNoticeBtn')?.addEventListener('click', confirmAdNoticeAndOpen);
+  const adNoticeModal = document.getElementById('adNoticeModal');
+  adNoticeModal?.addEventListener('click', (e) => {
+    if (e.target === adNoticeModal) closeAdNoticeModal();
+  });
 }
 
 /**
@@ -726,9 +734,43 @@ function escapeHtmlApp(str) {
   });
 }
 
+let pendingDownloadGameId = null;
+
 /**
- * 6. Modal de Descarga con Temporizador
+ * 6. Modal de Aviso de Publicidad y Descarga con Temporizador
  */
+function requestDownloadModal(gameId) {
+  pendingDownloadGameId = gameId;
+  const adNoticeModal = document.getElementById('adNoticeModal');
+  const adNoticeContainer = document.getElementById('adNoticeContainer');
+  
+  if (adNoticeModal) {
+    adNoticeModal.classList.remove('opacity-0', 'pointer-events-none');
+    adNoticeContainer?.classList.remove('scale-95');
+    updateBackNavigationVisibility();
+  } else {
+    // Si no existiera el modal por alguna razón, abrir directamente
+    openDownloadModal(gameId);
+  }
+}
+
+function closeAdNoticeModal() {
+  const adNoticeModal = document.getElementById('adNoticeModal');
+  const adNoticeContainer = document.getElementById('adNoticeContainer');
+  if (adNoticeContainer) adNoticeContainer.classList.add('scale-95');
+  if (adNoticeModal) adNoticeModal.classList.add('opacity-0', 'pointer-events-none');
+  pendingDownloadGameId = null;
+  updateBackNavigationVisibility();
+}
+
+function confirmAdNoticeAndOpen() {
+  const gameId = pendingDownloadGameId;
+  closeAdNoticeModal();
+  if (gameId !== null && gameId !== undefined) {
+    openDownloadModal(gameId);
+  }
+}
+
 function openDownloadModal(gameId) {
   const game = games.find(g => g.id === gameId);
   if (!game) return;
@@ -755,9 +797,22 @@ function openDownloadModal(gameId) {
   modalContainer.classList.remove('translate-y-full');
   updateBackNavigationVisibility();
 
-  // Disparar anuncio de Monetag ÚNICAMENTE durante la navegación (al hacer clic en un juego)
+  // Disparar In-App Interstitial de Monetag con la nueva configuración
   if (typeof show_11738612 === 'function') {
-    show_11738612().catch((e) => console.warn('Monetag navigation ad bypassed:', e));
+    try {
+      show_11738612({
+        type: 'inApp',
+        inAppSettings: {
+          frequency: 2,
+          capping: 0.1,
+          interval: 30,
+          timeout: 5,
+          everyPage: false
+        }
+      }).catch((e) => console.warn('Monetag In-App Interstitial ad bypassed:', e));
+    } catch(err) {
+      console.warn('Error al invocar show_11738612:', err);
+    }
   }
 
   startTimer(7);
